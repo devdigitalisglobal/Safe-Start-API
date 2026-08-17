@@ -20,10 +20,13 @@ export default async function healthRoutes(app: FastifyInstance) {
       const questions = await prisma.question.count();
       return { status: 'ok', database: 'connected', modules, questions };
     } catch (err) {
+      const hint =
+        err instanceof Error ? err.message.replace(/password[^\s]*/gi, '[redacted]') : 'unknown';
       request.log.error({ err }, 'Database health check failed');
       return reply.status(503).send({
         status: 'error',
         database: 'disconnected',
+        hint: hint.slice(0, 200),
         requestId: request.id,
       });
     }

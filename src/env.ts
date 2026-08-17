@@ -30,12 +30,13 @@ const schema = z
   .refine(
     (data) =>
       data.NODE_ENV !== 'production' ||
+      Boolean(data.DIRECT_URL) ||
       data.DATABASE_URL.includes('supabase.com') ||
       /sslmode=(require|verify-full)/.test(data.DATABASE_URL),
     {
       message:
-        'DATABASE_URL must use TLS in production (Supabase pooler or append ?sslmode=require)',
-      path: ['DATABASE_URL'],
+        'Set DIRECT_URL (session pooler, port 5432) for Vercel, or use DATABASE_URL with TLS',
+      path: ['DIRECT_URL'],
     }
   );
 
