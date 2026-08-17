@@ -17,6 +17,17 @@ import resourceRoutes from './routes/resources.js';
 import configRoutes from './routes/config.js';
 import partnerRoutes from './routes/partner/index.js';
 
+/** Vercel preview deploys get a unique subdomain on each build. */
+const VERCEL_DASHBOARD_ORIGIN =
+  /^https:\/\/safe-start-dashboard[a-z0-9-]*\.vercel\.app$/i;
+
+function isAllowedCorsOrigin(origin: string): boolean {
+  if (env.CORS_ORIGINS === '*') return true;
+  const allowed = env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
+  if (allowed.includes(origin)) return true;
+  return VERCEL_DASHBOARD_ORIGIN.test(origin);
+}
+
 /** Shared Fastify app — local `server.ts` and Vercel serverless entry. */
 export async function buildApp(): Promise<FastifyInstance> {
   const isProduction = env.NODE_ENV === 'production';
@@ -55,7 +66,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(cors, {
-    origin: env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map((o) => o.trim()),
+    origin: (origin, cb) => {
+      if (!origin || isAllowedCorsOrigin(origin)) {
+        cb(null, origin ?? true);
+        return;
+      }
+      cb(null, false);
+    },
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type'],
