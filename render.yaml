@@ -1,0 +1,34 @@
+# Render Blueprint — Safe Start API
+# https://render.com/docs/blueprint-spec
+#
+# Import: Render Dashboard → New → Blueprint → connect Safe-Start-API repo
+# Or create a Web Service manually with the same build/start commands.
+
+services:
+  - type: web
+    name: safe-start-api
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: npm ci && npx prisma generate && npm run build && npx prisma migrate deploy
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PARTNER_API_SIGNING_KEY
+        generateValue: true
+      - key: PORT
+        value: "10000"
