@@ -46,6 +46,11 @@ model User {
   id                String    @id
   email             String    @unique
   fullName          String
+  firstName         String?
+  lastName          String?
+  mobile            String?
+  suburb            String?
+  state             String?
   dateOfBirth       DateTime?
   schoolId          String?
   role              String    @default("student")

@@ -7,9 +7,10 @@ import { AppError } from '../middleware/errors.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { env } from '../env.js';
 import { buildPartnerConsentInfo, PARTNER_CONSENT_VERSION } from '../partners/consent.js';
+import { buildFullName, signupProfileFields } from '../users/signupProfile.js';
 
 const createProfileSchema = z.object({
-  fullName: z.string().min(2).max(100),
+  ...signupProfileFields,
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'),
   consentVersion: z.string(),
   inviteCode: z.string().optional(),
@@ -82,7 +83,12 @@ export default async function userRoutes(app: FastifyInstance) {
       data: {
         id: authId,
         email,
-        fullName: body.fullName,
+        fullName: buildFullName(body.firstName, body.lastName),
+        firstName: body.firstName,
+        lastName: body.lastName,
+        mobile: body.mobile,
+        suburb: body.suburb,
+        state: body.state,
         dateOfBirth: dob,
         schoolId,
         invitedAt,
@@ -91,8 +97,17 @@ export default async function userRoutes(app: FastifyInstance) {
         role: 'student',
       },
       select: {
-        id: true, email: true, fullName: true,
-        role: true, schoolId: true, registeredAt: true,
+        id: true,
+        email: true,
+        fullName: true,
+        firstName: true,
+        lastName: true,
+        mobile: true,
+        suburb: true,
+        state: true,
+        role: true,
+        schoolId: true,
+        registeredAt: true,
       },
     });
 
@@ -111,6 +126,11 @@ export default async function userRoutes(app: FastifyInstance) {
         id: true,
         email: true,
         fullName: true,
+        firstName: true,
+        lastName: true,
+        mobile: true,
+        suburb: true,
+        state: true,
         dateOfBirth: true,
         role: true,
         registeredAt: true,
@@ -136,6 +156,11 @@ export default async function userRoutes(app: FastifyInstance) {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      mobile: user.mobile,
+      suburb: user.suburb,
+      state: user.state,
       dateOfBirth: user.dateOfBirth,
       role: user.role,
       registeredAt: user.registeredAt?.toISOString() ?? null,
@@ -241,6 +266,11 @@ export default async function userRoutes(app: FastifyInstance) {
           deletedAt: new Date(),
           email: anonymisedEmail,
           fullName: 'Deleted user',
+          firstName: null,
+          lastName: null,
+          mobile: null,
+          suburb: null,
+          state: null,
           dateOfBirth: null,
           schoolId: null,
           partnerMemberRef: null,
