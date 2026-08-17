@@ -39,12 +39,30 @@ const schema = z
     }
   );
 
+function formatEnvErrors(error: z.ZodError): string {
+  const formatted = error.format();
+  const messages: string[] = [];
+
+  for (const [field, detail] of Object.entries(formatted)) {
+    if (field === '_errors') continue;
+    const fieldErrors = (detail as { _errors?: string[] })._errors;
+    if (fieldErrors?.length) {
+      messages.push(`${field}: ${fieldErrors.join(', ')}`);
+    }
+  }
+
+  return messages.length > 0
+    ? messages.join('; ')
+    : 'Invalid environment configuration — check Vercel env vars';
+}
+
 const parsed = schema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error('Invalid environment configuration:');
+  const detail = formatEnvErrors(parsed.error);
+  console.error('Invalid environment configuration:', detail);
   console.error(JSON.stringify(parsed.error.format(), null, 2));
-  throw new Error('Invalid environment configuration — check Vercel env vars');
+  throw new Error(detail);
 }
 
 export const env = parsed.data;
