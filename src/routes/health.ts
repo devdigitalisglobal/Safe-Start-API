@@ -10,13 +10,23 @@ export default async function healthRoutes(app: FastifyInstance) {
   }));
 
   app.get('/health/db', async (request, reply) => {
-    if (env.NODE_ENV === 'production') {
-      return reply.status(404).send({ error: 'Not found', requestId: request.id });
-    }
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      if (env.NODE_ENV === 'production') {
+        return { status: 'ok', database: 'connected' };
+      }
 
-    const modules = await prisma.module.count();
-    const questions = await prisma.question.count();
-    return { status: 'ok', database: 'connected', modules, questions };
+      const modules = await prisma.module.count();
+      const questions = await prisma.question.count();
+      return { status: 'ok', database: 'connected', modules, questions };
+    } catch (err) {
+      request.log.error({ err }, 'Database health check failed');
+      return reply.status(503).send({
+        status: 'error',
+        database: 'disconnected',
+        requestId: request.id,
+      });
+    }
   });
 
   /** Dev-only — returns auth claims; disabled in production. */

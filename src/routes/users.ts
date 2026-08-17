@@ -138,7 +138,7 @@ export default async function userRoutes(app: FastifyInstance) {
       fullName: user.fullName,
       dateOfBirth: user.dateOfBirth,
       role: user.role,
-      registeredAt: user.registeredAt.toISOString(),
+      registeredAt: user.registeredAt?.toISOString() ?? null,
       schoolId: user.school?.id ?? null,
       school: user.school ? { id: user.school.id, name: user.school.name } : null,
       partnerConsent: buildPartnerConsentInfo(user),
