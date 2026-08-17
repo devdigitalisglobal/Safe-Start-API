@@ -44,7 +44,7 @@ const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
   console.error('Invalid environment configuration:');
   console.error(JSON.stringify(parsed.error.format(), null, 2));
-  process.exit(1);
+  throw new Error('Invalid environment configuration — check Vercel env vars');
 }
 
 export const env = parsed.data;
