@@ -1,0 +1,35 @@
+import type { FastifyInstance } from 'fastify';
+import { prisma } from '../db.js';
+import { verifyToken, requireAuth } from '../middleware/auth.js';
+import { env } from '../env.js';
+
+export default async function healthRoutes(app: FastifyInstance) {
+  app.get('/health', async () => ({
+    status: 'ok',
+    time: new Date().toISOString(),
+  }));
+
+  app.get('/health/db', async (request, reply) => {
+    if (env.NODE_ENV === 'production') {
+      return reply.status(404).send({ error: 'Not found', requestId: request.id });
+    }
+
+    const modules = await prisma.module.count();
+    const questions = await prisma.question.count();
+    return { status: 'ok', database: 'connected', modules, questions };
+  });
+
+  /** Dev-only — returns auth claims; disabled in production. */
+  if (env.NODE_ENV !== 'production') {
+    app.get('/health/token', { preHandler: verifyToken }, async (request) => ({
+      status: 'ok',
+      authId: request.authId,
+      email: request.authEmail,
+    }));
+
+    app.get('/health/auth', { preHandler: requireAuth }, async (request) => ({
+      status: 'ok',
+      user: request.user,
+    }));
+  }
+}

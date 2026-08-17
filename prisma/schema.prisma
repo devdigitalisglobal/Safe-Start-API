@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Organisations ----------
+
+model School {
+  id           String   @id @default(uuid())
+  name         String
+  state        String?
+  contactEmail String?
+  inviteCode   String   @unique
+  status       String   @default("active")
+  partnerId    String?
+  createdAt    DateTime @default(now())
+
+  partner      Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  users        User[]
+  invitations  Invitation[]
+
+  @@index([partnerId])
+}
+
+model Invitation {
+  id         String    @id @default(uuid())
+  schoolId   String
+  email      String
+  code       String    @unique
+  sentAt     DateTime  @default(now())
+  acceptedAt DateTime?
+  expiresAt  DateTime
+
+  school     School    @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+}
+
+// ---------- People ----------
+
+model User {
+  id                String    @id
+  email             String    @unique
+  fullName          String
+  dateOfBirth       DateTime?
+  schoolId          String?
+  role              String    @default("student")
+
+  invitedAt         DateTime?
+  registeredAt      DateTime  @default(now())
+  lastActiveAt      DateTime?
+
+  consentVersion    String?
+  consentAt         DateTime?
+  guardianConsentAt DateTime?
+  partnerMemberRef  String?
+  partnerConsentVersion String?
+  partnerConsentAt  DateTime?
+  partnerConsentGranted Boolean?
+
+  deletedAt         DateTime?
+
+  school            School?   @relation(fields: [schoolId], references: [id])
+  moduleProgress    ModuleProgress[]
+  lessonViews       LessonView[]
+  attempts          AssessmentAttempt[]
+  moduleQuizAnswers ModuleQuizAnswer[]
+  events            Event[]
+  mediaAssets       MediaAsset[]
+
+  @@index([schoolId])
+  @@index([registeredAt])
+}
+
+// ---------- Content ----------
+
+model Module {
+  id           String   @id @default(uuid())
+  orderIndex   Int
+  title        String
+  subtitle     String?
+  slug         String   @unique
+  heroImageUrl String?
+  heroImageAlt String?
+  status       String   @default("published")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  outcomes     ModuleOutcome[]
+  lessons      Lesson[]
+  questions    Question[]
+  quizQuestions ModuleQuizQuestion[]
+  quizAnswers  ModuleQuizAnswer[]
+  progress     ModuleProgress[]
+
+  @@index([orderIndex])
+}
+
+model ModuleOutcome {
+  id         String @id @default(uuid())
+  moduleId   String
+  orderIndex Int
+  text       String
+
+  module     Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@index([moduleId])
+}
+
+model Lesson {
+  id         String @id @default(uuid())
+  moduleId   String
+  orderIndex Int
+  type       String
+  heading    String
+  body       String?
+  icon       String?
+  imageUrl   String?
+  imageAlt   String?
+
+  module     Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  takeaways  LessonTakeaway[]
+  views      LessonView[]
+
+  @@index([moduleId, orderIndex])
+}
+
+model LessonTakeaway {
+  id         String @id @default(uuid())
+  lessonId   String
+  orderIndex Int
+  text       String
+
+  lesson     Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+}
+
+// ---------- Assessments ----------
+
+model KnowledgeArea {
+  id         String @id @default(uuid())
+  key        String @unique
+  name       String
+  orderIndex Int
+
+  questions  Question[]
+  answers    AssessmentAnswer[]
+}
+
+model Assessment {
+  id          String @id @default(uuid())
+  type        String @unique
+  title       String
+  subtitle    String?
+  description String?
+  status      String @default("published")
+
+  questions   Question[]
+  attempts    AssessmentAttempt[]
+}
+
+model Question {
+  id              String @id @default(uuid())
+  assessmentId    String
+  knowledgeAreaId String
+  moduleId        String?
+  orderIndex      Int
+  text            String
+  explanation     String?
+
+  assessment      Assessment    @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  knowledgeArea   KnowledgeArea @relation(fields: [knowledgeAreaId], references: [id])
+  module          Module?       @relation(fields: [moduleId], references: [id])
+  options         QuestionOption[]
+  answers         AssessmentAnswer[]
+
+  @@index([assessmentId, orderIndex])
+  @@index([knowledgeAreaId])
+  @@index([moduleId])
+}
+
+model QuestionOption {
+  id         String  @id @default(uuid())
+  questionId String
+  letter     String
+  text       String
+  isCorrect  Boolean @default(false)
+
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers    AssessmentAnswer[]
+
+  @@index([questionId])
+}
+
+model AssessmentAttempt {
+  id             String    @id @default(uuid())
+  userId         String
+  assessmentId   String
+  attemptNumber  Int       @default(1)
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  totalScore     Int?
+  totalQuestions Int?
+
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessment     Assessment @relation(fields: [assessmentId], references: [id])
+  answers        AssessmentAnswer[]
+
+  @@index([userId, assessmentId])
+  @@index([assessmentId])
+}
+
+model AssessmentAnswer {
+  id               String   @id @default(uuid())
+  attemptId        String
+  questionId       String
+  selectedOptionId String?
+  isCorrect        Boolean
+  knowledgeAreaId  String
+  answeredAt       DateTime @default(now())
+
+  attempt          AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question         Question          @relation(fields: [questionId], references: [id])
+  selectedOption   QuestionOption?   @relation(fields: [selectedOptionId], references: [id])
+  knowledgeArea    KnowledgeArea     @relation(fields: [knowledgeAreaId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@index([questionId])
+  @@index([knowledgeAreaId])
+  @@index([selectedOptionId])
+}
+
+// ---------- Progress ----------
+
+model ModuleProgress {
+  id               String    @id @default(uuid())
+  userId           String
+  moduleId         String
+  status           String    @default("not_started")
+  lastStepIndex    Int       @default(0)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  quizSubmittedAt  DateTime?
+  timeSpentSeconds Int       @default(0)
+
+  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module           Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId])
+  @@index([moduleId, status])
+}
+
+model ModuleQuizQuestion {
+  id         String @id @default(uuid())
+  moduleId   String
+  orderIndex Int
+  text       String
+
+  module     Module              @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  options    ModuleQuizOption[]
+  answers    ModuleQuizAnswer[]
+
+  @@unique([moduleId, orderIndex])
+  @@index([moduleId])
+}
+
+model ModuleQuizOption {
+  id         String  @id @default(uuid())
+  questionId String
+  letter     String
+  text       String
+  isCorrect  Boolean @default(false)
+
+  question   ModuleQuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers    ModuleQuizAnswer[]
+
+  @@index([questionId])
+}
+
+model ModuleQuizAnswer {
+  id               String   @id @default(uuid())
+  userId           String
+  moduleId         String
+  questionId       String
+  selectedOptionId String
+  isCorrect        Boolean
+  answeredAt       DateTime @default(now())
+
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module           Module             @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  question         ModuleQuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption   ModuleQuizOption   @relation(fields: [selectedOptionId], references: [id])
+
+  @@unique([userId, moduleId, questionId])
+  @@index([moduleId])
+  @@index([questionId])
+}
+
+model LessonView {
+  id               String   @id @default(uuid())
+  userId           String
+  lessonId         String
+  viewedAt         DateTime @default(now())
+  timeSpentSeconds Int      @default(0)
+
+  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson           Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+  @@index([userId])
+}
+
+// ---------- Media ----------
+
+model MediaAsset {
+  id           String   @id @default(uuid())
+  fileName     String
+  storageKey   String   @unique
+  publicUrl    String
+  altText      String
+  mimeType     String
+  byteSize     Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}
+
+// ---------- Partner white-label ----------
+
+model Partner {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  name      String
+  logoUrl   String?
+  logoAlt   String?
+  isDefault Boolean  @default(false)
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schools   School[]
+  credentials PartnerApiCredential[]
+}
+
+model PartnerApiCredential {
+  id           String    @id @default(uuid())
+  partnerId    String
+  clientId     String    @unique
+  secretHash   String
+  label        String?
+  scopes       String    @default("reports:read")
+  status       String    @default("active")
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+
+  partner      Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@index([status])
+}
+
+// ---------- Learner resources (B15 shell) ----------
+
+model ResourceItem {
+  id         String   @id @default(uuid())
+  category   String
+  title      String
+  summary    String?
+  body       String?
+  url        String?
+  orderIndex Int
+  status     String   @default("published")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([category, orderIndex])
+  @@index([status])
+}
+
+// ---------- Analytics ----------
+
+model Event {
+  id         String   @id @default(uuid())
+  userId     String?
+  schoolId   String?
+  type       String
+  payload    Json?
+  occurredAt DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([type, occurredAt])
+  @@index([schoolId, occurredAt])
+  @@index([userId])
+}
