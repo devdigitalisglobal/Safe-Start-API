@@ -6,7 +6,8 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 30,
-      "memory": 1024
+      "memory": 1024,
+      "includeFiles": "{dist/**,generated/**}"
     }
   },
   "rewrites": [
