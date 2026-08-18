@@ -8,6 +8,7 @@ import { rateLimit } from '../middleware/rateLimit.js';
 import { env } from '../env.js';
 import { buildPartnerConsentInfo, PARTNER_CONSENT_VERSION } from '../partners/consent.js';
 import { buildFullName, signupProfileFields } from '../users/signupProfile.js';
+import mfaRecoveryRoutes from './mfaRecovery.js';
 
 const createProfileSchema = z.object({
   ...signupProfileFields,
@@ -316,4 +317,6 @@ export default async function userRoutes(app: FastifyInstance) {
 
     return reply.status(204).send();
   });
+
+  await app.register(mfaRecoveryRoutes, { prefix: '/me/mfa' });
 }

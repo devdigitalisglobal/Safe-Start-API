@@ -12,6 +12,7 @@ const schema = z
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     CORS_ORIGINS: z.string().default('*'),
     PARTNER_API_SIGNING_KEY: z.string().min(32).optional(),
+    MFA_RECOVERY_PEPPER: z.string().min(16).optional(),
   })
   .refine(
     (data) => !(data.NODE_ENV === 'production' && data.CORS_ORIGINS === '*'),

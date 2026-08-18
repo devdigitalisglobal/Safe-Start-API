@@ -78,6 +78,7 @@ model User {
   moduleQuizAnswers ModuleQuizAnswer[]
   events            Event[]
   mediaAssets       MediaAsset[]
+  mfaRecoveryCodes  MfaRecoveryCode[]
 
   @@index([schoolId])
   @@index([partnerId])
@@ -339,6 +340,18 @@ model MediaAsset {
   uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ---------- Partner white-label ----------
