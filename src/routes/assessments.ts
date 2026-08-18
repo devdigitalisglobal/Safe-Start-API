@@ -52,13 +52,17 @@ export default async function assessmentRoutes(app: FastifyInstance) {
         completedAt: true,
         totalScore: true,
         totalQuestions: true,
+        _count: { select: { answers: true } },
       },
     });
 
     return {
       ...assessment,
       questionCount: assessment.questions.length,
-      attempts,
+      attempts: attempts.map(({ _count, ...attempt }) => ({
+        ...attempt,
+        answeredCount: _count.answers,
+      })),
       hasCompleted: attempts.some(a => a.completedAt !== null),
     };
   });
@@ -72,10 +76,20 @@ export default async function assessmentRoutes(app: FastifyInstance) {
       prisma.assessment.findFirst({ where: { type: 'finish_line' }, select: { id: true } }),
     ]);
 
-    const [sgAttempt, flAttempt, totalModules, completedModules] = await Promise.all([
+    const [sgAttempt, sgInProgress, flAttempt, totalModules, completedModules] = await Promise.all([
       startingGrid
         ? prisma.assessmentAttempt.findFirst({
             where: { userId, assessmentId: startingGrid.id, completedAt: { not: null } },
+          })
+        : null,
+      startingGrid
+        ? prisma.assessmentAttempt.findFirst({
+            where: {
+              userId,
+              assessmentId: startingGrid.id,
+              completedAt: null,
+              answers: { some: {} },
+            },
           })
         : null,
       finishLine
@@ -91,7 +105,7 @@ export default async function assessmentRoutes(app: FastifyInstance) {
     const allModulesDone = totalModules > 0 && completedModules >= totalModules;
 
     return {
-      startingGrid: { required: true, completed: startingGridDone },
+      startingGrid: { required: true, completed: startingGridDone, inProgress: !!sgInProgress },
       modules: {
         unlocked: startingGridDone,
         total: totalModules,
