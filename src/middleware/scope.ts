@@ -16,7 +16,7 @@ export function schoolFilter(
   if (!user) throw new AppError(401, 'Not authenticated');
 
   // Internal staff and partners may query across schools
-  if (user.role === 'staff' || user.role === 'partner') {
+  if (user.role === 'staff' || user.role === 'super_admin' || user.role === 'partner') {
     return requestedSchoolId ? { schoolId: requestedSchoolId } : {};
   }
 

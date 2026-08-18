@@ -1,15 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../db.js';
-import { requireAuth } from '../../middleware/auth.js';
 import { AppError } from '../../middleware/errors.js';
+import { requireSuperAdmin } from '../../middleware/admin.js';
+import {
+  INVITE_PORTAL_ROLES,
+  PORTAL_DIRECTORY_ROLES,
+  isSuperAdmin,
+} from '../../lib/roles.js';
 import {
   countUnusedRecoveryCodes,
   isMfaEnrolled,
   resetUserMfa,
 } from '../../services/mfaRecovery.js';
 import {
-  PORTAL_ROLES,
   createPortalUser,
   deactivatePortalUser,
   getPortalUser,
@@ -19,27 +23,19 @@ import {
 } from '../../services/portalUsers.js';
 import { writeAudit } from './writeAudit.js';
 
-/** Team management — Auto Verifi staff only. */
-async function requireStaffOnly(request: Parameters<typeof requireAuth>[0], reply: Parameters<typeof requireAuth>[1]) {
-  await requireAuth(request, reply);
-  if (request.user!.role !== 'staff') {
-    throw new AppError(403, 'Staff access denied', 'FORBIDDEN');
-  }
-}
-
 const idParams = z.object({ id: z.string().uuid() });
 
 const createUserSchema = z.object({
   email: z.string().email().max(320),
   fullName: z.string().min(2).max(100),
-  role: z.enum(PORTAL_ROLES),
+  role: z.enum(INVITE_PORTAL_ROLES),
   schoolId: z.string().uuid().nullable().optional(),
   partnerId: z.string().uuid().nullable().optional(),
 });
 
 const updateUserSchema = z.object({
   fullName: z.string().min(2).max(100).optional(),
-  role: z.enum(PORTAL_ROLES).optional(),
+  role: z.enum(INVITE_PORTAL_ROLES).optional(),
   schoolId: z.string().uuid().nullable().optional(),
   partnerId: z.string().uuid().nullable().optional(),
 });
@@ -58,9 +54,7 @@ const portalUserSelect = {
   partner: { select: { name: true } },
 } as const;
 
-async function mapPortalUserWithMfa(
-  u: Parameters<typeof mapPortalUserRow>[0]
-) {
+async function mapPortalUserWithMfa(u: Parameters<typeof mapPortalUserRow>[0]) {
   const [mfaEnrolled, unusedRecoveryCodes] = await Promise.all([
     isMfaEnrolled(u.id),
     countUnusedRecoveryCodes(u.id),
@@ -71,12 +65,18 @@ async function mapPortalUserWithMfa(
   };
 }
 
+function assertMutablePortalTarget(userId: string, role: string) {
+  if (isSuperAdmin(role)) {
+    throw new AppError(403, 'Super admin accounts are managed outside the Team page', 'FORBIDDEN');
+  }
+}
+
 export default async function adminUserRoutes(app: FastifyInstance) {
-  /** List portal users. */
-  app.get('/', { preHandler: requireStaffOnly }, async () => {
+  /** List portal users — super admin only. */
+  app.get('/', { preHandler: requireSuperAdmin }, async () => {
     const rows = await prisma.user.findMany({
       where: {
-        role: { in: [...PORTAL_ROLES] },
+        role: { in: [...PORTAL_DIRECTORY_ROLES] },
       },
       orderBy: [{ deletedAt: 'asc' }, { role: 'asc' }, { fullName: 'asc' }],
       select: portalUserSelect,
@@ -87,7 +87,7 @@ export default async function adminUserRoutes(app: FastifyInstance) {
   });
 
   /** Create a portal user with a one-time temporary password. */
-  app.post('/', { preHandler: requireStaffOnly }, async (request, reply) => {
+  app.post('/', { preHandler: requireSuperAdmin }, async (request, reply) => {
     const body = createUserSchema.parse(request.body);
     const actorId = request.user!.id;
 
@@ -105,7 +105,7 @@ export default async function adminUserRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/:id/deactivate', { preHandler: requireStaffOnly }, async (request) => {
+  app.post('/:id/deactivate', { preHandler: requireSuperAdmin }, async (request) => {
     const { id } = idParams.parse(request.params);
     const actorId = request.user!.id;
 
@@ -113,13 +113,16 @@ export default async function adminUserRoutes(app: FastifyInstance) {
       throw new AppError(400, 'You cannot deactivate your own account', 'BAD_REQUEST');
     }
 
+    const target = await getPortalUser(id);
+    assertMutablePortalTarget(id, target.role);
+
     await deactivatePortalUser(id);
     await writeAudit(actorId, 'admin_portal_user_deactivated', { userId: id });
 
     return { deactivated: true, userId: id };
   });
 
-  app.post('/:id/reactivate', { preHandler: requireStaffOnly }, async (request) => {
+  app.post('/:id/reactivate', { preHandler: requireSuperAdmin }, async (request) => {
     const { id } = idParams.parse(request.params);
     const actorId = request.user!.id;
 
@@ -130,11 +133,18 @@ export default async function adminUserRoutes(app: FastifyInstance) {
     return mapPortalUserWithMfa(user);
   });
 
-  app.post('/:id/mfa/reset', { preHandler: requireStaffOnly }, async (request) => {
+  /** Reset MFA — super admin only; never for super admin accounts. */
+  app.post('/:id/mfa/reset', { preHandler: requireSuperAdmin }, async (request) => {
     const { id } = idParams.parse(request.params);
     const actorId = request.user!.id;
 
-    await getPortalUser(id);
+    if (id === actorId) {
+      throw new AppError(400, 'You cannot reset your own MFA from the Team page', 'BAD_REQUEST');
+    }
+
+    const target = await getPortalUser(id);
+    assertMutablePortalTarget(id, target.role);
+
     const result = await resetUserMfa(id);
 
     await writeAudit(actorId, 'admin_mfa_reset', {
@@ -145,17 +155,19 @@ export default async function adminUserRoutes(app: FastifyInstance) {
     return { reset: true, removedFactors: result.removedFactors };
   });
 
-  /** Single portal user. */
-  app.get('/:id', { preHandler: requireStaffOnly }, async (request) => {
+  app.get('/:id', { preHandler: requireSuperAdmin }, async (request) => {
     const { id } = idParams.parse(request.params);
     const user = await getPortalUser(id);
     return mapPortalUserWithMfa(user);
   });
 
-  app.patch('/:id', { preHandler: requireStaffOnly }, async (request) => {
+  app.patch('/:id', { preHandler: requireSuperAdmin }, async (request) => {
     const { id } = idParams.parse(request.params);
     const body = updateUserSchema.parse(request.body);
     const actorId = request.user!.id;
+
+    const existing = await getPortalUser(id);
+    assertMutablePortalTarget(id, existing.role);
 
     const user = await updatePortalUser(id, body);
 

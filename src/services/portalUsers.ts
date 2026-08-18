@@ -2,9 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { prisma } from '../db.js';
 import { supabaseAdmin } from '../storage.js';
 import { AppError } from '../middleware/errors.js';
+import { INVITE_PORTAL_ROLES, PORTAL_DIRECTORY_ROLES, type InvitePortalRole } from '../lib/roles.js';
 
-export const PORTAL_ROLES = ['staff', 'partner', 'school_admin', 'reviewer'] as const;
-export type PortalRole = (typeof PORTAL_ROLES)[number];
+/** @deprecated Use INVITE_PORTAL_ROLES — super_admin is never invited via API. */
+export const PORTAL_ROLES = INVITE_PORTAL_ROLES;
+export type PortalRole = InvitePortalRole;
 
 export type CreatePortalUserInput = {
   email: string;
@@ -179,7 +181,7 @@ export async function getPortalUser(userId: string) {
     },
   });
 
-  if (!user || !PORTAL_ROLES.includes(user.role as PortalRole)) {
+  if (!user || !(PORTAL_DIRECTORY_ROLES as readonly string[]).includes(user.role)) {
     throw new AppError(404, 'Portal user not found', 'NOT_FOUND');
   }
 
