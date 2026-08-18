@@ -74,6 +74,83 @@ const createModuleSchema = z.object({
     .optional(),
 });
 
+const quizOptionSchema = z.object({
+  letter: z.enum(['A', 'B', 'C', 'D']),
+  text: z.string().min(1).max(1000),
+  isCorrect: z.boolean(),
+});
+
+const quizQuestionSchema = z.object({
+  orderIndex: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  text: z.string().min(1).max(2000),
+  options: z.array(quizOptionSchema).length(4),
+});
+
+const replaceModuleQuizSchema = z.object({
+  questions: z.array(quizQuestionSchema).length(3),
+});
+
+const QUIZ_LETTERS = ['A', 'B', 'C', 'D'] as const;
+
+function validateQuizPayload(questions: z.infer<typeof replaceModuleQuizSchema>['questions']) {
+  const orderIndexes = questions.map((q) => q.orderIndex).sort((a, b) => a - b);
+  if (orderIndexes.join(',') !== '1,2,3') {
+    throw new AppError(400, 'Quiz must include questions 1, 2, and 3', 'BAD_REQUEST');
+  }
+
+  for (const question of questions) {
+    const correctCount = question.options.filter((o) => o.isCorrect).length;
+    if (correctCount !== 1) {
+      throw new AppError(
+        400,
+        `Question ${question.orderIndex} must have exactly one correct option`,
+        'BAD_REQUEST'
+      );
+    }
+    const letters = question.options.map((o) => o.letter).sort().join(',');
+    if (letters !== 'A,B,C,D') {
+      throw new AppError(
+        400,
+        `Question ${question.orderIndex} must have options A through D`,
+        'BAD_REQUEST'
+      );
+    }
+  }
+}
+
+async function assertModuleQuizComplete(moduleId: string) {
+  const questions = await prisma.moduleQuizQuestion.findMany({
+    where: { moduleId },
+    orderBy: { orderIndex: 'asc' },
+    include: { options: { orderBy: { letter: 'asc' } } },
+  });
+
+  if (questions.length !== 3) {
+    throw new AppError(
+      400,
+      'Module quiz must have exactly 3 questions before publish',
+      'QUIZ_INCOMPLETE'
+    );
+  }
+
+  try {
+    validateQuizPayload(
+      questions.map((q) => ({
+        orderIndex: q.orderIndex as 1 | 2 | 3,
+        text: q.text,
+        options: q.options.map((o) => ({
+          letter: o.letter as 'A' | 'B' | 'C' | 'D',
+          text: o.text,
+          isCorrect: o.isCorrect,
+        })),
+      }))
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(400, 'Module quiz is incomplete', 'QUIZ_INCOMPLETE');
+  }
+}
+
 function slugifyTitle(title: string) {
   const base = title
     .toLowerCase()
@@ -252,6 +329,108 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
 
     if (!module) throw new AppError(404, 'Module not found', 'NOT_FOUND');
     return module;
+  });
+
+  /** Module quiz for CMS — includes correct answers. */
+  app.get('/:id/quiz', { preHandler: requireAdminRead }, async (request) => {
+    const { id } = idParams.parse(request.params);
+
+    const module = await prisma.module.findUnique({ where: { id }, select: { id: true } });
+    if (!module) throw new AppError(404, 'Module not found', 'NOT_FOUND');
+
+    const questions = await prisma.moduleQuizQuestion.findMany({
+      where: { moduleId: id },
+      orderBy: { orderIndex: 'asc' },
+      select: {
+        id: true,
+        orderIndex: true,
+        text: true,
+        options: {
+          orderBy: { letter: 'asc' },
+          select: { id: true, letter: true, text: true, isCorrect: true },
+        },
+      },
+    });
+
+    return { moduleId: id, questions };
+  });
+
+  /** Replace all module quiz questions atomically. */
+  app.put('/:id/quiz', { preHandler: requireAdminWrite }, async (request) => {
+    const { id } = idParams.parse(request.params);
+    const body = replaceModuleQuizSchema.parse(request.body);
+    const userId = request.user!.id;
+
+    const module = await prisma.module.findUnique({ where: { id }, select: { id: true } });
+    if (!module) throw new AppError(404, 'Module not found', 'NOT_FOUND');
+
+    validateQuizPayload(body.questions);
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.moduleQuizQuestion.findMany({
+        where: { moduleId: id },
+        include: { options: true },
+      });
+
+      for (const question of body.questions) {
+        let row = existing.find((item) => item.orderIndex === question.orderIndex);
+        if (row) {
+          row = await tx.moduleQuizQuestion.update({
+            where: { id: row.id },
+            data: { text: question.text },
+            include: { options: true },
+          });
+        } else {
+          row = await tx.moduleQuizQuestion.create({
+            data: { moduleId: id, orderIndex: question.orderIndex, text: question.text },
+            include: { options: true },
+          });
+        }
+
+        for (const letter of QUIZ_LETTERS) {
+          const payload = question.options.find((o) => o.letter === letter)!;
+          const existingOption = row.options.find((o) => o.letter === letter);
+          if (existingOption) {
+            await tx.moduleQuizOption.update({
+              where: { id: existingOption.id },
+              data: { text: payload.text, isCorrect: payload.isCorrect },
+            });
+          } else {
+            await tx.moduleQuizOption.create({
+              data: {
+                questionId: row.id,
+                letter,
+                text: payload.text,
+                isCorrect: payload.isCorrect,
+              },
+            });
+          }
+        }
+      }
+
+      const keepOrderIndexes = new Set<number>(body.questions.map((q) => q.orderIndex));
+      for (const stale of existing.filter((q) => !keepOrderIndexes.has(q.orderIndex))) {
+        await tx.moduleQuizQuestion.delete({ where: { id: stale.id } });
+      }
+    });
+
+    await writeAudit(userId, 'admin_module_quiz_updated', { moduleId: id });
+
+    const questions = await prisma.moduleQuizQuestion.findMany({
+      where: { moduleId: id },
+      orderBy: { orderIndex: 'asc' },
+      select: {
+        id: true,
+        orderIndex: true,
+        text: true,
+        options: {
+          orderBy: { letter: 'asc' },
+          select: { id: true, letter: true, text: true, isCorrect: true },
+        },
+      },
+    });
+
+    return { moduleId: id, questions };
   });
 
   /** Update module metadata, workflow status, and/or outcomes. */
@@ -570,6 +749,8 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
       throw new AppError(400, 'Only draft modules can be submitted for review', 'INVALID_STATUS');
     }
 
+    await assertModuleQuizComplete(id);
+
     const module = await prisma.module.update({
       where: { id },
       data: { status: 'review' },
@@ -652,6 +833,8 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
         'INVALID_STATUS'
       );
     }
+
+    await assertModuleQuizComplete(id);
 
     const module = await prisma.module.update({
       where: { id },
