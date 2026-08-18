@@ -6,6 +6,7 @@ import adminAuditRoutes from './audit.js';
 import adminMediaRoutes from './media.js';
 import adminPartnerRoutes from './partners.js';
 import adminResourceRoutes from './resources.js';
+import adminUserRoutes from './users.js';
 
 export default async function adminRoutes(app: FastifyInstance) {
   await app.register(adminModuleRoutes, { prefix: '/modules' });
@@ -15,4 +16,5 @@ export default async function adminRoutes(app: FastifyInstance) {
   await app.register(adminMediaRoutes, { prefix: '/media' });
   await app.register(adminPartnerRoutes, { prefix: '/partners' });
   await app.register(adminResourceRoutes, { prefix: '/resources' });
+  await app.register(adminUserRoutes, { prefix: '/users' });
 }
