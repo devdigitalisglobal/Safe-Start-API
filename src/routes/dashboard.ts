@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { prisma } from '../db.js';
 import { requireDashboardAccess } from '../middleware/dashboard.js';
 import { AppError } from '../middleware/errors.js';
-import { schoolFilter } from '../middleware/scope.js';
+import { resolveDashboardScope, invitationWhere, eventWhere, schoolsWithStudentsWhere } from '../middleware/scope.js';
 import { buildDashboardCsv, buildDashboardPdfHtml } from '../dashboard/export.js';
 import { launchPdfBrowser } from '../dashboard/puppeteer.js';
 import {
@@ -113,6 +113,16 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       return { schools: school ? [school] : [] };
     }
 
+    if (user.role === 'partner') {
+      if (!user.partnerId) return { schools: [] };
+      const schools = await prisma.school.findMany({
+        where: { partnerId: user.partnerId, status: 'active' },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      });
+      return { schools };
+    }
+
     const schools = await prisma.school.findMany({
       where: { status: 'active' },
       select: { id: true, name: true },
@@ -127,7 +137,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
    */
   app.get('/reach', { preHandler: requireDashboardAccess }, async (request) => {
     const filters = dashboardFiltersSchema.parse(request.query);
-    const scope = schoolFilter(request, filters.schoolId);
+    const scope = await resolveDashboardScope(request, filters.schoolId);
     const range = dateRange(filters);
     const { start: mauStart, end: mauEnd } = mauWindow(filters);
 
@@ -136,6 +146,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       ...studentScope,
       ...(range ? { registeredAt: range } : {}),
     };
+    const eventScope = await eventWhere(scope);
 
     const [
       registeredUsers,
@@ -150,24 +161,15 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       prisma.user.count({ where: studentScope }),
       scope.schoolId
         ? prisma.user.count({ where: studentScope }).then((n) => (n > 0 ? 1 : 0))
-        : prisma.school.count({
-            where: {
-              status: 'active',
-              users: { some: { deletedAt: null, role: 'student' } },
-            },
-          }),
+        : prisma.school.count({ where: schoolsWithStudentsWhere(scope) }),
       prisma.invitation.count({
-        where: {
-          ...(scope.schoolId ? { schoolId: scope.schoolId } : {}),
-          ...(range ? { sentAt: range } : {}),
-        },
+        where: invitationWhere(scope, range ? { sentAt: range } : {}),
       }),
       prisma.invitation.count({
-        where: {
-          ...(scope.schoolId ? { schoolId: scope.schoolId } : {}),
+        where: invitationWhere(scope, {
           acceptedAt: { not: null },
           ...(range ? { sentAt: range } : {}),
-        },
+        }),
       }),
       prisma.user.count({
         where: {
@@ -181,7 +183,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
           type: 'session_started',
           userId: { not: null },
           occurredAt: { gte: mauStart, lte: mauEnd },
-          ...(scope.schoolId ? { schoolId: scope.schoolId } : {}),
+          ...eventScope,
         },
       }).then((rows) => rows.length),
     ]);
@@ -249,7 +251,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
    */
   app.get('/engagement', { preHandler: requireDashboardAccess }, async (request) => {
     const filters = dashboardFiltersSchema.parse(request.query);
-    const scope = schoolFilter(request, filters.schoolId);
+    const scope = await resolveDashboardScope(request, filters.schoolId);
     const range = dateRange(filters);
 
     const studentScope = studentWhere(scope);
@@ -477,7 +479,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
    */
   app.get('/learning', { preHandler: requireDashboardAccess }, async (request) => {
     const filters = dashboardFiltersSchema.parse(request.query);
-    const scope = schoolFilter(request, filters.schoolId);
+    const scope = await resolveDashboardScope(request, filters.schoolId);
     const completedAt = attemptCompletedRange(filters);
     const startedAt = dateRange(filters);
     const suppressionReason = `Fewer than ${MIN_COHORT_SIZE} students in this cohort — figure withheld to protect privacy.`;
@@ -779,7 +781,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
     { preHandler: requireDashboardAccess },
     async (request) => {
       const filters = dashboardFiltersSchema.parse(request.query);
-      const scope = schoolFilter(request, filters.schoolId);
+      const scope = await resolveDashboardScope(request, filters.schoolId);
       const completedAt = attemptCompletedRange(filters);
 
       const [areas, sgAssessment, flAssessment] = await Promise.all([

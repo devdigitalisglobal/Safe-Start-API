@@ -7,7 +7,11 @@ import { supabaseAdmin } from '../storage.js';
 export const RECOVERY_CODE_COUNT = 10;
 
 function recoveryPepper() {
-  return env.MFA_RECOVERY_PEPPER ?? env.SUPABASE_SERVICE_KEY.slice(0, 32);
+  if (env.MFA_RECOVERY_PEPPER) return env.MFA_RECOVERY_PEPPER;
+  if (env.NODE_ENV === 'production') {
+    throw new AppError(500, 'MFA recovery is not configured', 'MFA_CONFIG_ERROR');
+  }
+  return env.SUPABASE_SERVICE_KEY.slice(0, 32);
 }
 
 export function normalizeRecoveryCode(code: string) {

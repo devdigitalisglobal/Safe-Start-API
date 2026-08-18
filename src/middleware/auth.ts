@@ -14,6 +14,7 @@ export type AuthUser = {
   email: string;
   role: string;
   schoolId: string | null;
+  partnerId: string | null;
 };
 
 declare module 'fastify' {
@@ -41,6 +42,7 @@ export async function verifyToken(request: FastifyRequest) {
   try {
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: `${env.SUPABASE_URL}/auth/v1`,
+      audience: 'authenticated',
     });
 
     if (!payload.sub) {
@@ -69,6 +71,7 @@ export async function requireAuth(request: FastifyRequest, _reply: FastifyReply)
       email: true,
       role: true,
       schoolId: true,
+      partnerId: true,
       deletedAt: true,
     },
   });
@@ -86,6 +89,7 @@ export async function requireAuth(request: FastifyRequest, _reply: FastifyReply)
     email: user.email,
     role: user.role,
     schoolId: user.schoolId,
+    partnerId: user.partnerId,
   };
 
   // Fire and forget — powers the "monthly active users" metric.
@@ -119,6 +123,7 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
       email: true,
       role: true,
       schoolId: true,
+      partnerId: true,
       deletedAt: true,
     },
   });
@@ -130,6 +135,7 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
     email: user.email,
     role: user.role,
     schoolId: user.schoolId,
+    partnerId: user.partnerId,
   };
 }
 

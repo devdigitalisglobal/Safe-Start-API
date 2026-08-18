@@ -82,6 +82,15 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerErrorHandler(app);
 
+  if (
+    isProduction &&
+    (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN)
+  ) {
+    app.log.warn(
+      'UPSTASH_REDIS_REST_URL/TOKEN not set — rate limits use in-memory store (not shared across instances)'
+    );
+  }
+
   await app.register(healthRoutes);
   await app.register(userRoutes, { prefix: '/users' });
   await app.register(moduleRoutes, { prefix: '/modules' });

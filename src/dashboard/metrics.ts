@@ -31,15 +31,29 @@ export function mauWindow(filters: DashboardFilters) {
   return { start, end };
 }
 
-export function studentWhere(scope: { schoolId?: string }) {
+import type { DashboardScope } from '../middleware/scope.js';
+
+export function studentWhere(scope: DashboardScope) {
+  if (scope.partnerId) {
+    return {
+      deletedAt: null,
+      role: 'student' as const,
+      school: {
+        partnerId: scope.partnerId,
+        status: 'active' as const,
+        ...(scope.schoolId ? { id: scope.schoolId } : {}),
+      },
+    };
+  }
+
   return {
     deletedAt: null,
     role: 'student' as const,
-    ...scope,
+    ...(scope.schoolId ? { schoolId: scope.schoolId } : {}),
   };
 }
 
-export function isSmallSchoolCohort(scope: { schoolId?: string }, studentCount: number) {
+export function isSmallSchoolCohort(scope: DashboardScope, studentCount: number) {
   return scope.schoolId !== undefined && studentCount < MIN_COHORT_SIZE;
 }
 

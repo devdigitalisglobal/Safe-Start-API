@@ -12,7 +12,10 @@ const schema = z
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     CORS_ORIGINS: z.string().default('*'),
     PARTNER_API_SIGNING_KEY: z.string().min(32).optional(),
-    MFA_RECOVERY_PEPPER: z.string().min(16).optional(),
+    MFA_RECOVERY_PEPPER: z.string().min(32).optional(),
+    PORTAL_MFA_REQUIRED: z.enum(['true', 'false']).optional(),
+    UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+    UPSTASH_REDIS_REST_TOKEN: z.string().min(10).optional(),
   })
   .refine(
     (data) => !(data.NODE_ENV === 'production' && data.CORS_ORIGINS === '*'),
@@ -38,6 +41,13 @@ const schema = z
       message:
         'Set DIRECT_URL (session pooler, port 5432) for Vercel, or use DATABASE_URL with TLS',
       path: ['DIRECT_URL'],
+    }
+  )
+  .refine(
+    (data) => data.NODE_ENV !== 'production' || Boolean(data.MFA_RECOVERY_PEPPER),
+    {
+      message: 'MFA_RECOVERY_PEPPER is required in production (min 32 chars)',
+      path: ['MFA_RECOVERY_PEPPER'],
     }
   );
 
