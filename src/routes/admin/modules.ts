@@ -81,13 +81,13 @@ const quizOptionSchema = z.object({
 });
 
 const quizQuestionSchema = z.object({
-  orderIndex: z.number().int().min(1).max(3),
+  orderIndex: z.number().int().min(1),
   text: z.string().min(1).max(2000),
   options: z.array(quizOptionSchema).length(4),
 });
 
 const replaceModuleQuizSchema = z.object({
-  questions: z.array(quizQuestionSchema).max(3),
+  questions: z.array(quizQuestionSchema),
 });
 
 const QUIZ_LETTERS = ['A', 'B', 'C', 'D'] as const;
@@ -130,18 +130,14 @@ async function assertModuleQuizComplete(moduleId: string) {
     include: { options: { orderBy: { letter: 'asc' } } },
   });
 
-  if (questions.length !== 3) {
-    throw new AppError(
-      400,
-      'Module quiz must have exactly 3 questions before publish',
-      'QUIZ_INCOMPLETE'
-    );
+  if (questions.length === 0) {
+    return;
   }
 
   try {
     validateQuizPayload(
       questions.map((q) => ({
-        orderIndex: q.orderIndex as 1 | 2 | 3,
+        orderIndex: q.orderIndex,
         text: q.text,
         options: q.options.map((o) => ({
           letter: o.letter as 'A' | 'B' | 'C' | 'D',

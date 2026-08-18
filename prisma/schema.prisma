@@ -53,6 +53,7 @@ model User {
   state             String?
   dateOfBirth       DateTime?
   schoolId          String?
+  partnerId         String?
   role              String    @default("student")
 
   invitedAt         DateTime?
@@ -70,6 +71,7 @@ model User {
   deletedAt         DateTime?
 
   school            School?   @relation(fields: [schoolId], references: [id])
+  partner           Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   moduleProgress    ModuleProgress[]
   lessonViews       LessonView[]
   attempts          AssessmentAttempt[]
@@ -78,6 +80,7 @@ model User {
   mediaAssets       MediaAsset[]
 
   @@index([schoolId])
+  @@index([partnerId])
   @@index([registeredAt])
 }
 
@@ -351,7 +354,8 @@ model Partner {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  schools   School[]
+  schools     School[]
+  users       User[]
   credentials PartnerApiCredential[]
 }
 
