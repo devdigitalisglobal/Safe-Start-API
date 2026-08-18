@@ -81,21 +81,26 @@ const quizOptionSchema = z.object({
 });
 
 const quizQuestionSchema = z.object({
-  orderIndex: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  orderIndex: z.number().int().min(1).max(3),
   text: z.string().min(1).max(2000),
   options: z.array(quizOptionSchema).length(4),
 });
 
 const replaceModuleQuizSchema = z.object({
-  questions: z.array(quizQuestionSchema).length(3),
+  questions: z.array(quizQuestionSchema).max(3),
 });
 
 const QUIZ_LETTERS = ['A', 'B', 'C', 'D'] as const;
 
 function validateQuizPayload(questions: z.infer<typeof replaceModuleQuizSchema>['questions']) {
   const orderIndexes = questions.map((q) => q.orderIndex).sort((a, b) => a - b);
-  if (orderIndexes.join(',') !== '1,2,3') {
-    throw new AppError(400, 'Quiz must include questions 1, 2, and 3', 'BAD_REQUEST');
+  const expected = orderIndexes.map((_, index) => index + 1);
+  if (orderIndexes.length > 0 && orderIndexes.join(',') !== expected.join(',')) {
+    throw new AppError(
+      400,
+      'Quiz question numbers must be sequential starting at 1',
+      'BAD_REQUEST'
+    );
   }
 
   for (const question of questions) {

@@ -17,6 +17,7 @@ const updateQuestionSchema = z.object({
   text: z.string().min(1).max(2000).optional(),
   explanation: z.string().max(2000).nullable().optional(),
   knowledgeAreaId: z.string().uuid().optional(),
+  moduleId: z.string().uuid().nullable().optional(),
   options: z
     .array(
       z.object({
@@ -29,6 +30,38 @@ const updateQuestionSchema = z.object({
     .length(4)
     .optional(),
 });
+
+const createQuestionSchema = z.object({
+  text: z.string().min(1).max(2000),
+  explanation: z.string().max(2000).nullable().optional(),
+  knowledgeAreaId: z.string().uuid(),
+  moduleId: z.string().uuid().nullable().optional(),
+  options: z
+    .array(
+      z.object({
+        letter: z.enum(['A', 'B', 'C', 'D']),
+        text: z.string().min(1).max(1000),
+        isCorrect: z.boolean(),
+      })
+    )
+    .length(4),
+});
+
+const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const;
+
+function validateQuestionOptions(
+  options: { letter: string; isCorrect: boolean }[],
+  label: string
+) {
+  const correctCount = options.filter((o) => o.isCorrect).length;
+  if (correctCount !== 1) {
+    throw new AppError(400, `${label} must have exactly one correct option`, 'BAD_REQUEST');
+  }
+  const letters = options.map((o) => o.letter).sort().join(',');
+  if (letters !== 'A,B,C,D') {
+    throw new AppError(400, `${label} must have options A through D`, 'BAD_REQUEST');
+  }
+}
 
 export default async function adminAssessmentRoutes(app: FastifyInstance) {
   /** Knowledge areas for question tagging. */
@@ -96,6 +129,70 @@ export default async function adminAssessmentRoutes(app: FastifyInstance) {
     return { assessment, questions };
   });
 
+  /** Create a new assessment question. */
+  app.post('/:type/questions', { preHandler: requireAdminWrite }, async (request, reply) => {
+    const { type } = typeParams.parse(request.params);
+    const body = createQuestionSchema.parse(request.body);
+    const userId = request.user!.id;
+
+    const assessment = await prisma.assessment.findFirst({
+      where: { type },
+      select: { id: true },
+    });
+    if (!assessment) throw new AppError(404, 'Assessment not found', 'NOT_FOUND');
+
+    const area = await prisma.knowledgeArea.findUnique({ where: { id: body.knowledgeAreaId } });
+    if (!area) throw new AppError(400, 'Invalid knowledge area', 'BAD_REQUEST');
+
+    if (body.moduleId) {
+      const module = await prisma.module.findUnique({ where: { id: body.moduleId } });
+      if (!module) throw new AppError(400, 'Invalid module', 'BAD_REQUEST');
+    }
+
+    validateQuestionOptions(body.options, 'Question');
+
+    const maxOrder = await prisma.question.aggregate({
+      where: { assessmentId: assessment.id },
+      _max: { orderIndex: true },
+    });
+    const orderIndex = (maxOrder._max.orderIndex ?? 0) + 1;
+
+    const created = await prisma.$transaction(async (tx) => {
+      const question = await tx.question.create({
+        data: {
+          assessmentId: assessment.id,
+          orderIndex,
+          text: body.text,
+          explanation: body.explanation ?? null,
+          knowledgeAreaId: body.knowledgeAreaId,
+          moduleId: body.moduleId ?? null,
+        },
+      });
+
+      for (const letter of OPTION_LETTERS) {
+        const opt = body.options.find((o) => o.letter === letter)!;
+        await tx.questionOption.create({
+          data: {
+            questionId: question.id,
+            letter,
+            text: opt.text,
+            isCorrect: opt.isCorrect,
+          },
+        });
+      }
+
+      return question;
+    });
+
+    await writeAudit(userId, 'admin_question_created', {
+      questionId: created.id,
+      assessmentType: type,
+      orderIndex,
+    });
+
+    return reply.status(201).send({ id: created.id, orderIndex });
+  });
+
   /** Update question text, knowledge area, and options. */
   app.patch('/questions/:questionId', { preHandler: requireAdminWrite }, async (request) => {
     const { questionId } = questionParams.parse(request.params);
@@ -113,11 +210,13 @@ export default async function adminAssessmentRoutes(app: FastifyInstance) {
       if (!area) throw new AppError(400, 'Invalid knowledge area', 'BAD_REQUEST');
     }
 
+    if (body.moduleId) {
+      const module = await prisma.module.findUnique({ where: { id: body.moduleId } });
+      if (!module) throw new AppError(400, 'Invalid module', 'BAD_REQUEST');
+    }
+
     if (body.options) {
-      const correctCount = body.options.filter((o) => o.isCorrect).length;
-      if (correctCount !== 1) {
-        throw new AppError(400, 'Exactly one option must be marked correct', 'BAD_REQUEST');
-      }
+      validateQuestionOptions(body.options, 'Question');
     }
 
     await prisma.$transaction(async (tx) => {
@@ -127,6 +226,7 @@ export default async function adminAssessmentRoutes(app: FastifyInstance) {
           ...(body.text !== undefined ? { text: body.text } : {}),
           ...(body.explanation !== undefined ? { explanation: body.explanation } : {}),
           ...(body.knowledgeAreaId !== undefined ? { knowledgeAreaId: body.knowledgeAreaId } : {}),
+          ...(body.moduleId !== undefined ? { moduleId: body.moduleId } : {}),
         },
       });
 
