@@ -54,41 +54,84 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return stableStringify(a) === stableStringify(b);
 }
 
+async function getTokenViaPassword(
+  email: string,
+  password: string,
+  supabaseUrl: string,
+  apiKey: string
+): Promise<string | null> {
+  const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      apikey: apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) return null;
+
+  const body = (await res.json()) as { access_token?: string };
+  return body.access_token ?? null;
+}
+
+/** Dev-only — uses service key when password env vars are not set. */
+async function getTokenViaServiceKey(email: string): Promise<string | null> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+  const anonKey = process.env.SUPABASE_ANON_KEY ?? serviceKey;
+
+  if (!supabaseUrl || !serviceKey || !anonKey) return null;
+
+  const { createClient } = await import('@supabase/supabase-js');
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+  });
+
+  const tokenHash = data?.properties?.hashed_token;
+  if (error || !tokenHash) return null;
+
+  const res = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ type: 'magiclink', token_hash: tokenHash }),
+  });
+
+  if (!res.ok) return null;
+
+  const body = (await res.json()) as { access_token?: string };
+  return body.access_token ?? null;
+}
+
 async function getToken(): Promise<string | null> {
   const email = process.env.TEST_DASHBOARD_EMAIL ?? 'staff@safestart.dev';
   const password = process.env.TEST_DASHBOARD_PASSWORD ?? process.env.DASHBOARD_DEV_PASSWORD;
   const supabaseUrl = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
 
-  if (!password || !supabaseUrl || !anonKey) {
-    fail(
-      'Auth setup',
-      'Set TEST_DASHBOARD_PASSWORD or DASHBOARD_DEV_PASSWORD plus SUPABASE_URL and SUPABASE_ANON_KEY'
-    );
+  if (supabaseUrl && anonKey && password) {
+    const token = await getTokenViaPassword(email, password, supabaseUrl, anonKey);
+    if (token) return token;
+    fail('Auth sign-in', `Password grant failed for ${email}`);
     return null;
   }
 
-  const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      apikey: anonKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
+  const serviceToken = await getTokenViaServiceKey(email);
+  if (serviceToken) return serviceToken;
 
-  if (!res.ok) {
-    fail('Auth sign-in', `Supabase returned ${res.status} for ${email}`);
-    return null;
-  }
-
-  const body = (await res.json()) as { access_token?: string };
-  if (!body.access_token) {
-    fail('Auth sign-in', 'No access_token in response');
-    return null;
-  }
-
-  return body.access_token;
+  fail(
+    'Auth setup',
+    'Set TEST_DASHBOARD_PASSWORD or DASHBOARD_DEV_PASSWORD, or ensure staff@safestart.dev exists (npm run seed:dashboard-users)'
+  );
+  return null;
 }
 
 async function apiGet(token: string, path: string): Promise<{ status: number; json: unknown; ms: number }> {
