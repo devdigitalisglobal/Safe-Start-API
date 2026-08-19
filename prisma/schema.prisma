@@ -222,6 +222,7 @@ model AssessmentAttempt {
 
   @@index([userId, assessmentId])
   @@index([assessmentId])
+  @@index([completedAt])
 }
 
 model AssessmentAnswer {
@@ -262,6 +263,7 @@ model ModuleProgress {
 
   @@unique([userId, moduleId])
   @@index([moduleId, status])
+  @@index([userId])
 }
 
 model ModuleQuizQuestion {
@@ -322,6 +324,7 @@ model LessonView {
 
   @@index([lessonId])
   @@index([userId])
+  @@index([userId, viewedAt])
 }
 
 // ---------- Media ----------

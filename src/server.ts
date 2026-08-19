@@ -1,10 +1,12 @@
 import { buildApp } from './app.js';
+import { closePdfBrowserPool } from './dashboard/puppeteer.js';
 import { prisma } from './db.js';
 import { env } from './env.js';
 
 const app = await buildApp();
 
 const shutdown = async () => {
+  await closePdfBrowserPool();
   await app.close();
   await prisma.$disconnect();
   process.exit(0);

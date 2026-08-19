@@ -2,6 +2,7 @@ import pg from 'pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { env } from './env.js';
+import { DB_SLOW_QUERY_MS } from './dashboard/observability.js';
 
 /** Runtime DB URL — session pooler (5432) on Vercel; DATABASE_URL elsewhere. */
 function resolveRuntimeConnectionString(): string {
@@ -29,7 +30,25 @@ const pool = new pg.Pool({
 
 const adapter = new PrismaPg(pool);
 
-export const prisma = new PrismaClient({
+const basePrisma = new PrismaClient({
   adapter,
-  log: env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+  log:
+    env.NODE_ENV === 'development'
+      ? [{ emit: 'event', level: 'query' }, 'warn', 'error']
+      : [{ emit: 'event', level: 'query' }, 'error'],
 });
+
+basePrisma.$on('query', (event) => {
+  if (event.duration < DB_SLOW_QUERY_MS) return;
+
+  console.warn(
+    JSON.stringify({
+      type: 'slow_query',
+      durationMs: event.duration,
+      model: event.target,
+      query: event.query.slice(0, 240),
+    })
+  );
+});
+
+export const prisma = basePrisma;

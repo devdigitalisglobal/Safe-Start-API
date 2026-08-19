@@ -4,6 +4,11 @@ import puppeteer, { type Browser } from 'puppeteer';
 import { AppError } from '../middleware/errors.js';
 
 const LAUNCH_ARGS = ['--no-sandbox', '--disable-setuid-sandbox'];
+const POOL_IDLE_MS = 5 * 60 * 1000;
+
+let pooledBrowser: Browser | null = null;
+let poolExpiresAt = 0;
+let browserLaunch: Promise<Browser> | null = null;
 
 function systemBrowserCandidates() {
   const localAppData = process.env.LOCALAPPDATA;
@@ -46,8 +51,7 @@ async function resolveExecutablePath(): Promise<string | undefined> {
   return undefined;
 }
 
-/** Launch headless Chrome/Edge for dashboard PDF rendering. */
-export async function launchPdfBrowser(): Promise<Browser> {
+async function launchPdfBrowser(): Promise<Browser> {
   const executablePath = await resolveExecutablePath();
 
   if (!executablePath) {
@@ -63,4 +67,73 @@ export async function launchPdfBrowser(): Promise<Browser> {
     executablePath,
     args: LAUNCH_ARGS,
   });
+}
+
+function touchPoolExpiry() {
+  poolExpiresAt = Date.now() + POOL_IDLE_MS;
+}
+
+function isPooledBrowserUsable() {
+  return Boolean(pooledBrowser?.connected && Date.now() < poolExpiresAt);
+}
+
+/** Reuse a warm headless browser between PDF exports (idle timeout 5 min). */
+export async function acquirePdfBrowser(): Promise<Browser> {
+  if (isPooledBrowserUsable()) {
+    touchPoolExpiry();
+    return pooledBrowser!;
+  }
+
+  if (pooledBrowser) {
+    await pooledBrowser.close().catch(() => {});
+    pooledBrowser = null;
+  }
+
+  if (!browserLaunch) {
+    browserLaunch = launchPdfBrowser()
+      .then((browser) => {
+        pooledBrowser = browser;
+        touchPoolExpiry();
+        browserLaunch = null;
+        return browser;
+      })
+      .catch((err) => {
+        browserLaunch = null;
+        throw err;
+      });
+  }
+
+  return browserLaunch;
+}
+
+/** Keep the pooled browser alive for the idle window after a PDF finishes. */
+export function releasePdfBrowser() {
+  if (pooledBrowser?.connected) {
+    touchPoolExpiry();
+  }
+}
+
+export async function closePdfBrowserPool() {
+  browserLaunch = null;
+  if (!pooledBrowser) return;
+  await pooledBrowser.close().catch(() => {});
+  pooledBrowser = null;
+  poolExpiresAt = 0;
+}
+
+export async function renderPdfFromHtml(html: string) {
+  const browser = await acquirePdfBrowser();
+  const page = await browser.newPage();
+
+  try {
+    await page.setContent(html, { waitUntil: 'load' });
+    return await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '20mm', right: '16mm', bottom: '20mm', left: '16mm' },
+    });
+  } finally {
+    await page.close().catch(() => {});
+    releasePdfBrowser();
+  }
 }

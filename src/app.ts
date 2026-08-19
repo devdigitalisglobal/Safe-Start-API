@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import { DASHBOARD_SLOW_MS } from './dashboard/observability.js';
 import { env } from './env.js';
 import { registerErrorHandler } from './middleware/errors.js';
 import { rateLimit } from './middleware/rateLimit.js';
@@ -79,6 +80,29 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.addHook('onRequest', rateLimit({ keyPrefix: 'global', limit: 120, windowMs: 60_000 }));
+
+  app.addHook('onResponse', (request, reply, done) => {
+    const route = request.routeOptions.url ?? request.url;
+    if (!route.startsWith('/dashboard')) {
+      done();
+      return;
+    }
+
+    const durationMs = Math.round(reply.elapsedTime);
+    if (durationMs >= DASHBOARD_SLOW_MS) {
+      request.log.warn(
+        {
+          durationMs,
+          route,
+          method: request.method,
+          statusCode: reply.statusCode,
+        },
+        'Slow dashboard request'
+      );
+    }
+
+    done();
+  });
 
   registerErrorHandler(app);
 
