@@ -21,21 +21,8 @@ const knowledgeAreas = [
 type KnowledgeAreaKey = (typeof knowledgeAreas)[number]["key"];
 
 // ---------------------------------------------------------------------------
-// 2. Modules
-//
-// Modules 4 and 7 are transcribed from the supplied client infographics
-// (Module_4_Roadside_Assistance.pdf and
-// Module_7_Practical_Tips_on_Maintaining_Your_Car_Safely.pdf).
-//
-// Modules 1, 2, 3, 5, 6 have no supplied lesson-copy source document — the
-// brief only names the topics and the quizzes test them. Outcomes / lesson
-// content / key takeaways below are drafted to match the quiz content as
-// PLACEHOLDER copy. Flag these for the client to review/replace before
-// launch; do not treat as final content.
-//
-// heroImageUrl is left null for every module — no hosted asset URLs were
-// supplied. Set these via the admin panel once assets are on the CDN
-// (client specifically asked for Module 4's image to be updated).
+// 2. Modules — lesson copy transcribed from client PDF infographics (Aug 2026).
+// heroImageUrl / lesson imageUrl: set via CMS once assets are on cms-media.
 // ---------------------------------------------------------------------------
 
 type LessonSeed = { heading: string; body: string; icon?: string; imageUrl?: string };
@@ -56,106 +43,144 @@ const modules: ModuleSeed[] = [
     orderIndex: 1,
     slug: "buying-your-first-car-safely",
     title: "Buying Your First Car Safely",
-    subtitle: "Buy smart before you sign anything.",
+    subtitle: "Make smart choices and drive confidently from day one.",
     knowledgeAreaKey: "buying_car",
-    // PLACEHOLDER — no source doc supplied for Module 1
     outcomes: [
-      "Understand which checks matter most before buying a used car",
-      "Know how to read a vehicle history report",
-      "Get an independent inspection instead of relying on the seller",
-      "Research comparable vehicles so you can negotiate with confidence",
+      "Choose the right car",
+      "Check history & condition",
+      "Get an independent inspection",
+      "Compare & negotiate",
+      "Transfer ownership safely",
     ],
     lessons: [
       {
-        heading: "Why the basics aren't enough",
-        body: "Colour, fuel level and number of previous owners tell you very little about whether a car is safe or fairly priced. Focus on vehicle history, condition and an independent inspection instead.",
+        heading: "Choose the right car",
+        body: "Consider safety ratings, reliability, running costs and P-plate legal vehicles.",
       },
       {
-        heading: "Vehicle history checks",
-        body: "Run a vehicle history check to confirm there's no money owing, it hasn't been written off, and the odometer reading is consistent with its age and wear.",
+        heading: "Check history & condition",
+        body: "Use a vehicle history report and inspect for accidents or damage.",
       },
       {
-        heading: "Get it inspected",
-        body: "Have an independent mechanic inspect the car before you commit — not one recommended by the seller.",
+        heading: "Get an independent inspection",
+        body: "Have a qualified inspector check the car before you buy.",
       },
       {
-        heading: "Know the market",
-        body: "Compare similar vehicles for sale to understand fair market pricing so you can negotiate confidently and avoid overpaying.",
+        heading: "Compare & negotiate",
+        body: "Research prices, compare options and negotiate with confidence.",
+      },
+      {
+        heading: "Transfer ownership safely",
+        body: "Complete the paperwork and transfer ownership the right way.",
       },
     ],
     keyTakeaways: [
-      "Check vehicle history, condition and get an independent inspection",
-      "Never skip the inspection, even if the seller says it's not needed",
-      "Compare similar vehicles before you make an offer",
-      "Fair pricing comes from research, not guesswork",
+      "Research your options",
+      "Check history reports",
+      "Get an independent inspection",
+      "Negotiate the best deal",
+      "Complete paperwork and transfer safely",
     ],
   },
   {
     orderIndex: 2,
     slug: "avoiding-scams",
     title: "Avoiding Scams",
-    subtitle: "Spot the warning signs before you pay.",
+    subtitle: "Know the tricks scammers use so you can buy with confidence and protect yourself.",
     knowledgeAreaKey: "scam_awareness",
-    // PLACEHOLDER — no source doc supplied for Module 2
     outcomes: [
-      "Recognise common used-car scam tactics",
-      "Know why you should never pay a deposit sight-unseen",
-      "Spot possible signs of odometer fraud",
-      "Verify a seller and vehicle before transferring any money",
+      "Online marketplace risks",
+      "Odometer fraud",
+      "Written-off vehicles",
+      "Fake service history",
+      "Stolen vehicles",
+      "Deposit scams",
+      "Identity theft",
+      "Safe payment methods",
     ],
     lessons: [
       {
-        heading: "The deposit-before-inspection trap",
-        body: "If a seller wants a deposit immediately but won't meet you or let you inspect the car, don't pay. Verify the seller and the vehicle first.",
+        heading: "Online marketplace risks",
+        body: "Scammers use fake ads, stolen photos and too-good-to-be-true deals. Watch for: sellers who avoid questions; listings with no history or a suspiciously low price.",
       },
       {
         heading: "Odometer fraud",
-        body: "Be cautious if the displayed kilometres don't appear consistent with the vehicle's age and wear — this can indicate the odometer has been tampered with.",
+        body: "Clocked odometers can hide the true wear and lead to expensive repairs. Watch for: mileage that doesn't match the car's age; signs of wear that don't add up.",
       },
       {
-        heading: "Staying safe when meeting a seller",
-        body: "Meet in a safe, public location, inspect the car in person, and never send money before you've verified who you're dealing with.",
+        heading: "Written-off vehicles",
+        body: "Written-off cars may look fine but could be unsafe and hard to insure. Watch for: repaired damage or mismatched panels; check history reports before you buy.",
+      },
+      {
+        heading: "Fake service history",
+        body: "Fake or tampered logbooks can hide poor maintenance. Watch for: incomplete or suspicious logbooks; verify with service centres if possible.",
+      },
+      {
+        heading: "Stolen vehicles",
+        body: "Buying stolen can mean you lose the car and your money. Watch for: a seller who can't prove ownership; always check the VIN and history.",
+      },
+      {
+        heading: "Deposit scams",
+        body: "Scammers take your deposit and disappear. Watch for: pressure to pay quickly; sellers unwilling to meet in person.",
+      },
+      {
+        heading: "Identity theft",
+        body: "Your personal information can be used fraudulently. Watch for: don't share ID or documents early; be cautious with online forms.",
+      },
+      {
+        heading: "Safe payment methods",
+        body: "The way you pay can protect you if something goes wrong. What to do: use secure bank transfer for full payment; avoid cash, gift cards or crypto.",
       },
     ],
     keyTakeaways: [
-      "Never pay a deposit before inspecting the car in person",
-      "Mismatched kilometres and wear can signal odometer fraud",
-      "Verify the seller and vehicle before any money changes hands",
-      "Meet in a safe, public location",
+      "Do your research and check everything",
+      "Meet in a safe public place",
+      "Inspect the car and test drive",
+      "Verify documents and history",
+      "Trust your instincts — if it feels wrong, walk away",
     ],
   },
   {
     orderIndex: 3,
     slug: "understanding-insurance",
     title: "Understanding Insurance",
-    subtitle: "Know your cover before you need it.",
+    subtitle: "Be covered. Be confident.",
     knowledgeAreaKey: "insurance",
-    // PLACEHOLDER — no source doc supplied for Module 3
     outcomes: [
-      "Understand the difference between CTP, Third Party and Comprehensive cover",
-      "Know what Comprehensive insurance protects",
-      "Understand what an excess is and when you pay it",
-      "Choose a policy that suits a first car and a young driver's budget",
+      "Types of car insurance",
+      "What affects your premium",
+      "Excesses explained",
+      "Making a claim",
+      "Avoid uninsured losses",
     ],
     lessons: [
       {
         heading: "Types of car insurance",
-        body: "CTP covers injury to other people. Third Party Property covers damage you cause to other vehicles/property. Comprehensive generally provides the broadest protection, covering damage to your own car as well as damage you cause to others.",
+        body: "Learn about Comprehensive, Third Party Property and CTP insurance.",
       },
       {
-        heading: "What is an excess?",
-        body: "An excess is an amount you may need to contribute when making a claim. A higher excess usually means a lower premium, and vice versa.",
+        heading: "What affects your premium",
+        body: "Your age, driving history, car type, location and how you use your car can impact costs.",
       },
       {
-        heading: "Choosing the right cover",
-        body: "Weigh up the value of your car, your budget, and how much risk you're comfortable carrying yourself before choosing a policy.",
+        heading: "Excesses explained",
+        body: "Understand what an excess is and how it affects a claim.",
+      },
+      {
+        heading: "Making a claim",
+        body: "Know the steps to take if you need to make a claim.",
+      },
+      {
+        heading: "Avoid uninsured losses",
+        body: "Being uninsured could leave you paying thousands.",
       },
     ],
     keyTakeaways: [
-      "Comprehensive cover generally offers the broadest protection",
-      "An excess is what you contribute when you make a claim",
-      "Higher excess usually means a lower premium",
-      "Match your cover to your budget and your car's value",
+      "Compare policies — don't just choose the first option",
+      "Read the PDS — always read the Product Disclosure Statement",
+      "Choose the right cover for your needs and budget",
+      "Review your policy each year",
+      "Contact your insurer if you're unsure about anything",
     ],
   },
   {
@@ -164,104 +189,142 @@ const modules: ModuleSeed[] = [
     title: "Understanding Roadside Assistance",
     subtitle: "Help when you need it most.",
     knowledgeAreaKey: "roadside",
-    // Sourced from Module_4_Roadside_Assistance.pdf
     outcomes: [
-      "Know what roadside assistance can help with — flat batteries, flat tyres, lockouts and breakdowns",
-      "Understand when a car may be towed instead of repaired on the spot",
-      "Know what to do while you wait for help to arrive",
-      "Understand what your membership plan covers",
+      "Flat batteries",
+      "Flat tyres",
+      "Lockouts",
+      "Breakdowns",
+      "Towing",
+      "Emergency help 24/7",
+      "Membership options",
     ],
     lessons: [
       {
-        heading: "What roadside assistance covers",
-        body: "Flat batteries: get a jump-start or battery replacement to get you moving. Flat tyres: assistance to change your tyre so you can get back on the road. Lockouts: locked out of your car? They'll help you get back in. Breakdowns: mechanical issues get sorted, or your car is towed safely.",
+        heading: "Flat batteries",
+        body: "Get a jump-start or battery replacement to get you moving.",
+      },
+      {
+        heading: "Flat tyres",
+        body: "Assistance to change your tyre so you can get back on the road.",
+      },
+      {
+        heading: "Lockouts",
+        body: "Locked out of your car? Roadside assistance can help you get back in.",
+      },
+      {
+        heading: "Breakdowns",
+        body: "Mechanical issues? Help to get your car going or tow it safely.",
       },
       {
         heading: "Towing",
-        body: "If your car can't be fixed on the spot, roadside assistance will tow it to a safe place — such as a repairer.",
+        body: "If your car can't be fixed on the spot, it can be towed to a safe place.",
       },
       {
-        heading: "Available 24/7",
-        body: "Emergency help is available anytime, day or night, and you can choose a membership plan that suits your needs and budget.",
+        heading: "Emergency help 24/7",
+        body: "Emergency help is available anytime, day or night.",
       },
       {
-        heading: "What to do when you break down",
-        body: "Stay safe: pull over in a safe location and turn on your hazard lights. Join before you need it: sign up for Safe Start Young Driver Care online in advance. Give your location: provide accurate details so help can find you quickly. Stay with your car unless it's unsafe to do so. Know your cover: understand what your plan includes and any limits.",
+        heading: "Membership options",
+        body: "Choose a plan that suits your needs and budget.",
       },
     ],
     keyTakeaways: [
-      "Roadside assistance covers flat batteries, flat tyres, lockouts and breakdowns",
-      "If it can't be fixed on the spot, your car may be towed to a safe place",
-      "Emergency help is available 24/7",
-      "Pull over safely, turn on hazards, and stay with your car unless it's unsafe",
+      "Stay safe — pull over in a safe location and turn on your hazard lights",
+      "Join Safe Start Young Driver Care before you need assistance",
+      "Give your location so help can find you quickly",
+      "Stay with your car unless it's unsafe to do so",
+      "Know your cover — understand what your plan includes and any limits",
     ],
   },
   {
     orderIndex: 5,
     slug: "registration-and-pink-slips",
     title: "Registration & Pink Slips",
-    subtitle: "Keep your car legally on the road.",
+    subtitle: "Stay legal. Stay on the road.",
     knowledgeAreaKey: "registration",
-    // PLACEHOLDER — no source doc supplied for Module 5
     outcomes: [
-      "Understand the purpose of a NSW pink slip/eSafety Check",
-      "Know when a blue slip is required",
-      "Understand what renewing registration involves",
-      "Know the safety standards your car must meet to stay registered",
+      "Registration renewals",
+      "Pink slips (eSafety checks)",
+      "Blue slips",
+      "Ownership transfers",
+      "Fees & charges",
+      "Avoid fines & defects",
     ],
     lessons: [
       {
-        heading: "What is a pink slip?",
-        body: "A NSW pink slip (eSafety Check) confirms the vehicle meets required safety standards for registration. It is not a valuation and doesn't check finance owing.",
+        heading: "Registration renewals",
+        body: "Know when your registration expires and how to renew it. Know the requirements before you buy — a vehicle may look like a bargain, but registration, inspections and transfer costs can quickly add up.",
       },
       {
-        heading: "What is a blue slip?",
-        body: "A blue slip is generally associated with unregistered vehicles and some interstate transfers, and involves a more thorough inspection than a pink slip.",
+        heading: "Pink slips (eSafety checks)",
+        body: "Most vehicles over 5 years old require an annual safety inspection.",
       },
       {
-        heading: "Renewing your registration",
-        body: "Keep track of your renewal date, make sure any required safety inspection is current, and budget for registration alongside insurance and running costs.",
+        heading: "Blue slips",
+        body: "Required for unregistered vehicles and some interstate transfers.",
+      },
+      {
+        heading: "Ownership transfers",
+        body: "Transfer registration correctly when buying or selling a vehicle.",
+      },
+      {
+        heading: "Fees & charges",
+        body: "Understand registration, transfer and inspection costs.",
+      },
+      {
+        heading: "Avoid fines & defects",
+        body: "Keep your vehicle roadworthy and compliant.",
       },
     ],
     keyTakeaways: [
-      "A pink slip confirms the car meets required safety standards",
-      "A blue slip applies to unregistered vehicles and some interstate transfers",
-      "Neither slip checks the car's value or finance owing",
-      "Track your renewal date so registration doesn't lapse",
+      "Check registration status — make sure the vehicle is registered and not written off",
+      "Confirm pink slip requirements before you buy",
+      "Budget for transfer fees, pink slip costs and registration",
+      "Complete ownership transfer online or at a Service NSW centre",
+      "Maintain registration and renew on time to avoid fines",
     ],
   },
   {
     orderIndex: 6,
     slug: "car-maintenance-and-safety",
     title: "Car Maintenance & Safety",
-    subtitle: "Look after your car so it looks after you.",
+    subtitle: "Look after your car. Protect yourself.",
     knowledgeAreaKey: "maintenance_safety",
-    // PLACEHOLDER — no source doc supplied for Module 6
     outcomes: [
-      "Understand why following the manufacturer's service schedule matters",
-      "Know which parts of the car to check regularly",
-      "Understand how maintenance affects safety, reliability and resale value",
-      "Build a habit of routine checks before driving",
+      "Regular servicing",
+      "Tyres & tyre pressure",
+      "Fluids & engine checks",
+      "Dashboard warning lights",
+      "Battery & emergency equipment",
     ],
     lessons: [
       {
-        heading: "Why servicing schedules matter",
-        body: "Following the manufacturer's recommended servicing schedule helps maintain reliability, safety and vehicle value over time.",
+        heading: "Regular servicing",
+        body: "Follow your manufacturer's service schedule to keep your vehicle reliable, safe and maintain its resale value.",
       },
       {
-        heading: "What to check regularly",
-        body: "Make a habit of checking tyres, fluids, lights and battery condition — these are the areas most likely to cause an unexpected breakdown or safety issue.",
+        heading: "Tyres & tyre pressure",
+        body: "Learn how to check tyre pressure, inspect tread depth and recognise uneven tyre wear before it becomes a safety risk.",
       },
       {
-        heading: "Building the habit",
-        body: "Set a reminder to run through these checks monthly, not just at service time, so small issues get caught early.",
+        heading: "Fluids & engine checks",
+        body: "Understand how to check engine oil, coolant, brake fluid and windscreen washer levels to avoid expensive repairs.",
+      },
+      {
+        heading: "Dashboard warning lights",
+        body: "Know what common warning lights mean and when you should stop driving and seek professional advice.",
+      },
+      {
+        heading: "Battery & emergency equipment",
+        body: "Learn how to identify a weak battery, carry essential emergency equipment and prepare for unexpected breakdowns. Why it matters: safer driving, fewer breakdowns, lower repair costs, better fuel efficiency and higher resale value.",
       },
     ],
     keyTakeaways: [
-      "Stick to the manufacturer's recommended service schedule",
-      "Regularly check tyres, fluids, lights and battery condition",
-      "Good maintenance protects safety, reliability and resale value",
-      "Monthly checks catch small issues before they become breakdowns",
+      "Walk around your car — check tyres, lights, mirrors and look for leaks or damage",
+      "Check fluids monthly — engine oil, coolant and washer fluid, especially before long trips",
+      "Don't skip services — regular servicing helps prevent breakdowns",
+      "Listen to your car — unusual noises, vibrations or warning lights should never be ignored",
+      "Be prepared — carry a spare tyre or repair kit, jumper leads, a torch and know who to call",
     ],
   },
   {
@@ -270,21 +333,23 @@ const modules: ModuleSeed[] = [
     title: "Practical Tips on Maintaining Your Car Safely",
     subtitle: "Hands-on skills every young driver should know.",
     knowledgeAreaKey: "practical_maintenance",
-    // Sourced from Module_7_Practical_Tips_on_Maintaining_Your_Car_Safely.pdf
     outcomes: [
-      "Know how to change a flat tyre safely",
-      "Know how to check and inflate tyres correctly, and when to do it",
-      "Know which fluids to check and how",
-      "Know which jobs are safe to DIY and which need a qualified mechanic",
+      "Changing a flat tyre",
+      "Checking & inflating tyres",
+      "Checking fluids",
+      "Battery checks",
+      "Lights & indicators",
+      "Emergency kit",
+      "Safety first — never DIY",
     ],
     lessons: [
       {
         heading: "Changing a flat tyre",
-        body: "Stop safely, use the jack, loosen the nuts. Fit the spare wheel and tighten the nuts. Follow temporary speed limits until you can get the tyre properly repaired or replaced.",
+        body: "Stop safely, use the jack and loosen the nuts. Fit the spare wheel and tighten the nuts. Follow temporary speed limits until the tyre is properly repaired or replaced.",
       },
       {
         heading: "Checking & inflating tyres",
-        body: "Find the correct pressure and use an air pump. Check pressure when the tyres are cold. Inspect tread depth and wear regularly.",
+        body: "Find the correct pressure and use an air pump. Check when tyres are cold. Inspect tread depth and wear regularly.",
       },
       {
         heading: "Checking fluids",
@@ -292,30 +357,27 @@ const modules: ModuleSeed[] = [
       },
       {
         heading: "Battery checks",
-        body: "Check for corrosion, look for signs of a weak battery, and keep terminals clean.",
+        body: "Check for corrosion, look for signs of a weak battery and keep terminals clean.",
       },
       {
         heading: "Lights & indicators",
-        body: "Check headlights, brake lights, indicators and reverse lights, and make sure your hazard lights work.",
+        body: "Check headlights, brake lights, indicators and reverse lights. Make sure your hazard lights work.",
       },
       {
         heading: "Emergency kit",
-        body: "Carry a spare tyre, jack, wheel brace and torch, jumper leads, gloves and a hi-vis vest, plus a first aid kit and a charged phone.",
+        body: "Carry a spare tyre, jack, wheel brace and torch; jumper leads, gloves and a hi-vis vest; plus a first aid kit and phone charger.",
       },
       {
         heading: "Safety first — never DIY",
-        body: "Leave brake repairs, airbag systems, steering or suspension repairs, and high-voltage EV or fuel system repairs to a qualified mechanic. If unsure, always get it checked by a professional.",
-      },
-      {
-        heading: "Smart checks before every drive",
-        body: "Walk around the car: check for flat tyres, fluid leaks, damage and broken lights. Inside the car: check dashboard warning lights, mirrors, seat position and fuel level. Monthly: check tyre pressure, washer bottle, lights, battery condition and tyre tread.",
+        body: "Leave brake repairs, airbag systems, steering or suspension repairs, and high-voltage EV or fuel system repairs to a qualified mechanic. If unsure, always get it checked by a professional. A well-maintained car is a safer car.",
       },
     ],
     keyTakeaways: [
-      "Always check tyre pressure when tyres are cold",
-      "Engine oil, coolant and washer fluid are safe to check yourself — leave brake fluid to a mechanic",
-      "Never attempt brake, airbag, steering, suspension or EV/fuel system repairs yourself",
-      "Carry an emergency kit and run smart checks before every drive",
+      "Check your tyres monthly — keep the right pressure and good tread",
+      "Never ignore warning lights — they are there to keep you safe",
+      "Keep washer fluid topped up — clear vision is critical for safety",
+      "Replace worn wiper blades for good visibility in all weather",
+      "Know when to call a mechanic — if unsure, get it checked by a professional",
     ],
   },
 ];
@@ -809,6 +871,25 @@ async function seedModules() {
         await prisma.lessonTakeaway.create({ data: { lessonId: summaryLesson.id, orderIndex, text } });
       }
     }
+
+    await prisma.moduleOutcome.deleteMany({
+      where: { moduleId: record.id, orderIndex: { gt: mod.outcomes.length } },
+    });
+
+    await prisma.lesson.deleteMany({
+      where: {
+        moduleId: record.id,
+        type: "lesson",
+        orderIndex: { gt: mod.lessons.length },
+      },
+    });
+
+    await prisma.lessonTakeaway.deleteMany({
+      where: {
+        lessonId: summaryLesson.id,
+        orderIndex: { gt: mod.keyTakeaways.length },
+      },
+    });
   }
 
   return idBySlug;
