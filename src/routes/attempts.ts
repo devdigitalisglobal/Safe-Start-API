@@ -107,6 +107,11 @@ export default async function attemptRoutes(app: FastifyInstance) {
                 questionId: true,
                 selectedOptionId: true,
                 isCorrect: true,
+                question: {
+                    select: {
+                        options: { select: { id: true, isCorrect: true } },
+                    },
+                },
             },
         });
 
@@ -114,11 +119,16 @@ export default async function attemptRoutes(app: FastifyInstance) {
             !!attempt.completedAt && attempt.assessment.type === 'finish_line';
 
         return {
-            answers: answers.map(a => ({
-                questionId: a.questionId,
-                optionId: a.selectedOptionId,
-                ...(showCorrectness ? { isCorrect: a.isCorrect } : {}),
-            })),
+            answers: answers.map(a => {
+                const correctOptionId = a.question.options.find(o => o.isCorrect)?.id;
+                return {
+                    questionId: a.questionId,
+                    optionId: a.selectedOptionId,
+                    ...(showCorrectness
+                        ? { isCorrect: a.isCorrect, correctOptionId }
+                        : {}),
+                };
+            }),
         };
     });
 
@@ -181,18 +191,8 @@ export default async function attemptRoutes(app: FastifyInstance) {
             },
         });
 
-        // Starting Grid returns no feedback — see note below
-        const assessment = await prisma.assessment.findUnique({
-            where: { id: attempt.assessmentId },
-            select: { type: true },
-        });
-
-        if (assessment?.type === 'starting_grid') {
-            return { saved: true, questionId: answer.questionId };
-        }
-
-        const correctOptionId = question.options.find(o => o.isCorrect)?.id;
-        return { saved: true, questionId: answer.questionId, isCorrect, correctOptionId };
+        // No feedback during the quiz — results are shown on the post-assessment screen.
+        return { saved: true, questionId: answer.questionId };
     });
 
     /** Finish an attempt and compute the score. */

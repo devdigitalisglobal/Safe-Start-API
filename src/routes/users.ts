@@ -41,6 +41,10 @@ const partnerConsentSchema = z.object({
     .optional(),
 });
 
+const pushTokenSchema = z.object({
+  expoPushToken: z.string().min(1).max(200).nullable(),
+});
+
 export default async function userRoutes(app: FastifyInstance) {
   /** Create the profile after Supabase signup. */
   app.post('/me', {
@@ -278,6 +282,18 @@ export default async function userRoutes(app: FastifyInstance) {
     });
   });
 
+  /** Register or clear the Expo push token for this device. */
+  app.patch('/me/push-token', { preHandler: requireAuth }, async (request) => {
+    const body = pushTokenSchema.parse(request.body);
+
+    await prisma.user.update({
+      where: { id: request.user!.id },
+      data: { expoPushToken: body.expoPushToken },
+    });
+
+    return { saved: true };
+  });
+
   /** Delete account — APP 12/13 and App Store requirement. */
   app.delete('/me', { preHandler: requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
@@ -308,6 +324,7 @@ export default async function userRoutes(app: FastifyInstance) {
           guardianConsentAt: null,
           invitedAt: null,
           lastActiveAt: null,
+          expoPushToken: null,
         },
       }),
       prisma.event.updateMany({ where: { userId }, data: { userId: null } }),

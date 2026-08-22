@@ -70,6 +70,8 @@ model User {
 
   deletedAt         DateTime?
 
+  expoPushToken     String?
+
   school            School?   @relation(fields: [schoolId], references: [id])
   partner           Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   moduleProgress    ModuleProgress[]
