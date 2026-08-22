@@ -9,7 +9,7 @@
         "build": "tsc",
         "start": "node dist/src/server.js",
         "seed": "tsx prisma/seed.ts",
-        "seed:dashboard-users": "tsx prisma/seed-dashboard-users.ts",
+        "seed:resources": "tsx prisma/seed-resources.ts",
         "db:studio": "prisma studio",
         "db:migrate": "prisma migrate dev",
         "db:deploy": "prisma migrate deploy",

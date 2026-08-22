@@ -17,9 +17,18 @@ const createProfileSchema = z.object({
   inviteCode: z.string().optional(),
 });
 
-const updateProfileSchema = z.object({
-  fullName: z.string().min(2).max(100).optional(),
-});
+const updateProfileSchema = z
+  .object({
+    firstName: z.string().trim().min(1).max(50).optional(),
+    lastName: z.string().trim().min(1).max(50).optional(),
+    fullName: z.string().min(2).max(100).optional(),
+  })
+  .refine(
+    (body) =>
+      (body.firstName !== undefined && body.lastName !== undefined) ||
+      body.fullName !== undefined,
+    { message: 'Provide firstName and lastName together, or fullName' }
+  );
 
 const partnerConsentSchema = z.object({
   consentVersion: z.literal(PARTNER_CONSENT_VERSION),
@@ -243,13 +252,29 @@ export default async function userRoutes(app: FastifyInstance) {
     };
   });
 
-  /** Update profile. */
+  /** Update profile — name fields stay in sync. */
   app.patch('/me', { preHandler: requireAuth }, async (request) => {
     const body = updateProfileSchema.parse(request.body);
+
+    const data =
+      body.firstName !== undefined && body.lastName !== undefined
+        ? {
+            firstName: body.firstName,
+            lastName: body.lastName,
+            fullName: buildFullName(body.firstName, body.lastName),
+          }
+        : { fullName: body.fullName! };
+
     return prisma.user.update({
       where: { id: request.user!.id },
-      data: body,
-      select: { id: true, fullName: true, email: true },
+      data,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        firstName: true,
+        lastName: true,
+      },
     });
   });
 

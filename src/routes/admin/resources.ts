@@ -8,6 +8,30 @@ import { writeAudit } from './writeAudit.js';
 
 const idParams = z.object({ id: z.string().uuid() });
 
+function mapResourceItem(item: {
+  id: string;
+  category: string;
+  title: string;
+  summary: string | null;
+  body: string | null;
+  url: string | null;
+  orderIndex: number;
+  status: string;
+  updatedAt: Date;
+}) {
+  return {
+    id: item.id,
+    category: item.category,
+    title: item.title,
+    summary: item.summary,
+    body: item.body,
+    url: item.url,
+    orderIndex: item.orderIndex,
+    status: item.status,
+    updatedAt: item.updatedAt.toISOString(),
+  };
+}
+
 const createSchema = z.object({
   category: z.enum(RESOURCE_CATEGORIES),
   title: z.string().min(1).max(200),
@@ -26,19 +50,16 @@ export default async function adminResourceRoutes(app: FastifyInstance) {
       orderBy: [{ category: 'asc' }, { orderIndex: 'asc' }],
     });
 
-    return {
-      items: items.map((item) => ({
-        id: item.id,
-        category: item.category,
-        title: item.title,
-        summary: item.summary,
-        body: item.body,
-        url: item.url,
-        orderIndex: item.orderIndex,
-        status: item.status,
-        updatedAt: item.updatedAt.toISOString(),
-      })),
-    };
+    return { items: items.map(mapResourceItem) };
+  });
+
+  app.get('/:id', { preHandler: requireAdminRead }, async (request) => {
+    const { id } = idParams.parse(request.params);
+
+    const item = await prisma.resourceItem.findUnique({ where: { id } });
+    if (!item) throw new AppError(404, 'Resource not found', 'NOT_FOUND');
+
+    return mapResourceItem(item);
   });
 
   app.post('/', { preHandler: requireAdminWrite }, async (request, reply) => {
