@@ -71,15 +71,12 @@ const HELPFUL_LINKS = [
     orderIndex: 3,
   },
   { title: 'Number Plates', url: 'https://myplates.com.au', orderIndex: 4 },
-  { title: 'Roadside Assistance (TBC)', url: null, orderIndex: 5 },
-  { title: 'Insurance (TBC)', url: null, orderIndex: 6 },
-  { title: 'Car Buying (TBC)', url: null, orderIndex: 7 },
-  { title: 'Pre Purchase inspection', url: 'https://autoverifi.com.au', orderIndex: 8 },
-  { title: 'History check', url: 'https://autoverifi.com.au', orderIndex: 9 },
-  { title: 'PPSR', url: 'https://ppsr.gov.au', orderIndex: 10 },
-  { title: 'Payment Escrow', url: 'https://safepay.com.au', orderIndex: 11 },
-  { title: 'ANCAP rating', url: 'https://www.ancap.com.au/', orderIndex: 12 },
-  { title: 'Valuation Research', url: 'https://www.redbook.com.au', orderIndex: 13 },
+  { title: 'Pre Purchase inspection', url: 'https://autoverifi.com.au', orderIndex: 5 },
+  { title: 'History check', url: 'https://autoverifi.com.au', orderIndex: 6 },
+  { title: 'PPSR', url: 'https://ppsr.gov.au', orderIndex: 7 },
+  { title: 'Payment Escrow', url: 'https://safepay.com.au', orderIndex: 8 },
+  { title: 'ANCAP rating', url: 'https://www.ancap.com.au/', orderIndex: 9 },
+  { title: 'Valuation Research', url: 'https://www.redbook.com.au', orderIndex: 10 },
 ] as const;
 
 async function main() {
