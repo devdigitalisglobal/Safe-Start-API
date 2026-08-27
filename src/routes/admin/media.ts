@@ -12,6 +12,7 @@ import {
   getPublicUrl,
   isAllowedMediaMimeType,
   detectImageMimeType,
+  normalizeMediaMimeType,
   uploadMediaFile,
 } from '../../storage.js';
 import { writeAudit } from './writeAudit.js';
@@ -83,11 +84,11 @@ export default async function adminMediaRoutes(app: FastifyInstance) {
     }
 
     if (altText.length < 1 || altText.length > 500) {
-      throw new AppError(400, 'Alt text is required (1–500 characters)', 'BAD_REQUEST');
-    }
-
-    if (!isAllowedMediaMimeType(data.mimetype)) {
-      throw new AppError(400, 'Only JPEG, PNG, WebP, and GIF images are allowed', 'BAD_REQUEST');
+      throw new AppError(
+        400,
+        'Alt text is required (1–500 characters). Send altText before the file in multipart forms.',
+        'BAD_REQUEST'
+      );
     }
 
     const buffer = await data.toBuffer();
@@ -99,12 +100,16 @@ export default async function adminMediaRoutes(app: FastifyInstance) {
     if (!sniffedMime || !isAllowedMediaMimeType(sniffedMime)) {
       throw new AppError(400, 'File content is not a supported image type', 'BAD_REQUEST');
     }
-    if (data.mimetype !== sniffedMime) {
+
+    const declaredMime = normalizeMediaMimeType(data.mimetype);
+    if (declaredMime && declaredMime !== sniffedMime) {
       throw new AppError(400, 'Declared file type does not match file content', 'BAD_REQUEST');
     }
 
+    const trustedMime = sniffedMime;
+
     const storageKey = buildStorageKey(data.filename);
-    await uploadMediaFile(storageKey, buffer, sniffedMime);
+    await uploadMediaFile(storageKey, buffer, trustedMime);
 
     const asset = await prisma.mediaAsset.create({
       data: {
@@ -112,7 +117,7 @@ export default async function adminMediaRoutes(app: FastifyInstance) {
         storageKey,
         publicUrl: getPublicUrl(storageKey),
         altText,
-        mimeType: sniffedMime,
+        mimeType: trustedMime,
         byteSize: buffer.byteLength,
         uploadedById: userId,
       },

@@ -38,8 +38,20 @@ export async function ensureMediaBucket() {
   bucketReady = true;
 }
 
+const MIME_ALIASES: Record<string, string> = {
+  'image/x-png': 'image/png',
+  'image/pjpeg': 'image/jpeg',
+};
+
+export function normalizeMediaMimeType(mimeType: string | undefined | null): string | null {
+  const trimmed = mimeType?.trim().toLowerCase() ?? '';
+  if (!trimmed) return null;
+  if (MIME_ALIASES[trimmed]) return MIME_ALIASES[trimmed];
+  return ALLOWED_MIME_TYPES.has(trimmed) ? trimmed : null;
+}
+
 export function isAllowedMediaMimeType(mimeType: string) {
-  return ALLOWED_MIME_TYPES.has(mimeType);
+  return normalizeMediaMimeType(mimeType) !== null;
 }
 
 /** Sniff image type from magic bytes — do not trust client Content-Type alone. */
