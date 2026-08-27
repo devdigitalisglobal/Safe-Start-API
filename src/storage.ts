@@ -9,6 +9,7 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/png',
   'image/webp',
   'image/gif',
+  'application/pdf',
 ]);
 
 export const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
@@ -83,6 +84,14 @@ export function detectImageMimeType(buffer: Buffer): string | null {
     return 'image/webp';
   }
   return null;
+}
+
+/** Sniff supported media type from magic bytes. */
+export function detectMediaMimeType(buffer: Buffer): string | null {
+  if (buffer.length >= 5 && buffer.subarray(0, 5).toString('ascii') === '%PDF-') {
+    return 'application/pdf';
+  }
+  return detectImageMimeType(buffer);
 }
 
 export function buildStorageKey(fileName: string) {

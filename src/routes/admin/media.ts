@@ -11,7 +11,7 @@ import {
   deleteMediaFile,
   getPublicUrl,
   isAllowedMediaMimeType,
-  detectImageMimeType,
+  detectMediaMimeType,
   normalizeMediaMimeType,
   uploadMediaFile,
 } from '../../storage.js';
@@ -72,7 +72,7 @@ export default async function adminMediaRoutes(app: FastifyInstance) {
     const data = await request.file();
 
     if (!data) {
-      throw new AppError(400, 'Image file is required', 'BAD_REQUEST');
+      throw new AppError(400, 'File is required', 'BAD_REQUEST');
     }
 
     const altField = data.fields.altText;
@@ -93,12 +93,12 @@ export default async function adminMediaRoutes(app: FastifyInstance) {
 
     const buffer = await data.toBuffer();
     if (buffer.byteLength > MAX_MEDIA_BYTES) {
-      throw new AppError(400, 'Image must be 5 MB or smaller', 'BAD_REQUEST');
+      throw new AppError(400, 'File must be 5 MB or smaller', 'BAD_REQUEST');
     }
 
-    const sniffedMime = detectImageMimeType(buffer);
+    const sniffedMime = detectMediaMimeType(buffer);
     if (!sniffedMime || !isAllowedMediaMimeType(sniffedMime)) {
-      throw new AppError(400, 'File content is not a supported image type', 'BAD_REQUEST');
+      throw new AppError(400, 'File content is not a supported image or PDF type', 'BAD_REQUEST');
     }
 
     const declaredMime = normalizeMediaMimeType(data.mimetype);
