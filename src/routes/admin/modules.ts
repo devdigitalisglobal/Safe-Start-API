@@ -96,7 +96,7 @@ const quizOptionSchema = z.object({
 
 const quizQuestionSchema = z.object({
   orderIndex: z.number().int().min(1),
-  text: z.string().min(1).max(2000),
+  text: z.string().min(1).max(2000).transform(sanitizeMarkdownField),
   options: z.array(quizOptionSchema).length(4),
 });
 

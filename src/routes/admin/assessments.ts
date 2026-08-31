@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../db.js';
 import { requireAdminRead, requireAdminWrite } from '../../middleware/admin.js';
 import { AppError } from '../../middleware/errors.js';
+import { sanitizeMarkdownField, sanitizeMarkdownNullable } from '../../lib/markdownSanitize.js';
 import { writeAudit } from './writeAudit.js';
 
 const typeParams = z.object({
@@ -14,8 +15,18 @@ const questionParams = z.object({
 });
 
 const updateQuestionSchema = z.object({
-  text: z.string().min(1).max(2000).optional(),
-  explanation: z.string().max(2000).nullable().optional(),
+  text: z
+    .string()
+    .min(1)
+    .max(2000)
+    .optional()
+    .transform((val) => (val === undefined ? val : sanitizeMarkdownField(val))),
+  explanation: z
+    .string()
+    .max(2000)
+    .nullable()
+    .optional()
+    .transform((val) => (val === undefined ? val : sanitizeMarkdownNullable(val))),
   knowledgeAreaId: z.string().uuid().optional(),
   moduleId: z.string().uuid().nullable().optional(),
   options: z
@@ -32,8 +43,13 @@ const updateQuestionSchema = z.object({
 });
 
 const createQuestionSchema = z.object({
-  text: z.string().min(1).max(2000),
-  explanation: z.string().max(2000).nullable().optional(),
+  text: z.string().min(1).max(2000).transform(sanitizeMarkdownField),
+  explanation: z
+    .string()
+    .max(2000)
+    .nullable()
+    .optional()
+    .transform((val) => sanitizeMarkdownNullable(val ?? null)),
   knowledgeAreaId: z.string().uuid(),
   moduleId: z.string().uuid().nullable().optional(),
   options: z
