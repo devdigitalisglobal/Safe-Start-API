@@ -9,6 +9,18 @@ import {
 import { AppError } from '../../middleware/errors.js';
 import { writeAudit } from './writeAudit.js';
 import { ensureKnowledgeAreaForModule } from '../../content/syncKnowledgeArea.js';
+import { sanitizeMarkdownField, sanitizeMarkdownNullable } from '../../lib/markdownSanitize.js';
+
+const markdownOptional = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((val) => {
+      if (val === undefined) return undefined;
+      return sanitizeMarkdownNullable(val);
+    });
 
 const idParams = z.object({ id: z.string().uuid() });
 const lessonParams = z.object({
@@ -22,16 +34,18 @@ const rejectSchema = z.object({
 
 const updateModuleSchema = z.object({
   title: z.string().min(1).max(200).optional(),
-  subtitle: z.string().max(500).nullable().optional(),
+  subtitle: markdownOptional(500),
   slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/).optional(),
   heroImageUrl: z.string().url().nullable().optional(),
   heroImageAlt: z.string().min(1).max(500).nullable().optional(),
-  outcomes: z.array(z.string().min(1).max(500)).optional(),
+  outcomes: z
+    .array(z.string().min(1).max(500).transform(sanitizeMarkdownField))
+    .optional(),
 });
 
 const updateLessonSchema = z.object({
   heading: z.string().min(1).max(200).optional(),
-  body: z.string().max(10000).nullable().optional(),
+  body: markdownOptional(10000),
   icon: z.string().max(50).nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
   imageAlt: z.string().min(1).max(500).nullable().optional(),
@@ -40,7 +54,7 @@ const updateLessonSchema = z.object({
 
 const createLessonSchema = z.object({
   heading: z.string().min(1).max(200),
-  body: z.string().max(10000).nullable().optional(),
+  body: markdownOptional(10000),
   imageUrl: z.string().url().nullable().optional(),
   imageAlt: z.string().min(1).max(500).nullable().optional(),
 });
@@ -65,7 +79,7 @@ const reorderLessonsSchema = z.object({
 
 const createModuleSchema = z.object({
   title: z.string().min(1).max(200),
-  subtitle: z.string().max(500).optional(),
+  subtitle: z.string().max(500).optional().transform((val) => (val ? sanitizeMarkdownField(val) : val)),
   slug: z
     .string()
     .min(1)

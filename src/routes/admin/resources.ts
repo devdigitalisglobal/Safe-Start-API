@@ -6,6 +6,19 @@ import { AppError } from '../../middleware/errors.js';
 import { RESOURCE_CATEGORIES } from '../../resources/categories.js';
 import { writeAudit } from './writeAudit.js';
 
+import { sanitizeMarkdownField, sanitizeMarkdownNullable } from '../../lib/markdownSanitize.js';
+
+const markdownOptional = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((val) => {
+      if (val === undefined) return undefined;
+      return sanitizeMarkdownNullable(val);
+    });
+
 const idParams = z.object({ id: z.string().uuid() });
 
 function mapResourceItem(item: {
@@ -35,8 +48,8 @@ function mapResourceItem(item: {
 const createSchema = z.object({
   category: z.enum(RESOURCE_CATEGORIES),
   title: z.string().min(1).max(200),
-  summary: z.string().max(500).nullable().optional(),
-  body: z.string().max(20000).nullable().optional(),
+  summary: markdownOptional(500),
+  body: markdownOptional(20000),
   url: z.string().url().nullable().optional(),
   orderIndex: z.number().int().min(1).optional(),
   status: z.enum(['draft', 'published']).optional(),
