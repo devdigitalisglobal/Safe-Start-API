@@ -83,7 +83,7 @@ export default async function attemptRoutes(app: FastifyInstance) {
         return reply.status(201).send({ ...attempt, resumed: false });
     });
 
-    /** Saved selections for an in-progress attempt — no correctness exposed. */
+    /** Saved selections; exposes correctness only after the attempt is completed. */
     app.get('/:id/answers', { preHandler: requireAuth }, async (request) => {
         const { id } = attemptParams.parse(request.params);
         const userId = request.user!.id;
@@ -94,6 +94,8 @@ export default async function attemptRoutes(app: FastifyInstance) {
                 id: true,
                 userId: true,
                 completedAt: true,
+                totalScore: true,
+                totalQuestions: true,
                 assessment: { select: { type: true } },
             },
         });
@@ -115,10 +117,15 @@ export default async function attemptRoutes(app: FastifyInstance) {
             },
         });
 
-        const showCorrectness =
-            !!attempt.completedAt && attempt.assessment.type === 'finish_line';
+        const showCorrectness = !!attempt.completedAt;
 
         return {
+            attempt: {
+                completed: !!attempt.completedAt,
+                totalScore: attempt.totalScore,
+                totalQuestions: attempt.totalQuestions,
+                type: attempt.assessment.type,
+            },
             answers: answers.map(a => {
                 const correctOptionId = a.question.options.find(o => o.isCorrect)?.id;
                 return {
@@ -140,7 +147,13 @@ export default async function attemptRoutes(app: FastifyInstance) {
 
         const attempt = await prisma.assessmentAttempt.findUnique({
             where: { id },
-            select: { id: true, userId: true, assessmentId: true, completedAt: true },
+            select: {
+                id: true,
+                userId: true,
+                assessmentId: true,
+                completedAt: true,
+                assessment: { select: { type: true } },
+            },
         });
 
         if (!attempt) throw new AppError(404, 'Attempt not found', 'NOT_FOUND');
@@ -191,8 +204,19 @@ export default async function attemptRoutes(app: FastifyInstance) {
             },
         });
 
-        // No feedback during the quiz — results are shown on the post-assessment screen.
-        return { saved: true, questionId: answer.questionId };
+        const response: {
+            saved: boolean;
+            questionId: string;
+            isCorrect?: boolean;
+            correctOptionId?: string;
+        } = { saved: true, questionId: answer.questionId };
+
+        if (attempt.assessment.type === 'finish_line') {
+            response.isCorrect = isCorrect;
+            response.correctOptionId = question.options.find((o) => o.isCorrect)?.id;
+        }
+
+        return response;
     });
 
     /** Finish an attempt and compute the score. */
