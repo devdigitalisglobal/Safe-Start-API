@@ -22,6 +22,8 @@ export default async function assessmentRoutes(app: FastifyInstance) {
         title: true,
         subtitle: true,
         description: true,
+        heroImageUrl: true,
+        heroImageAlt: true,
         questions: {
           orderBy: { orderIndex: 'asc' },
           select: {

@@ -164,12 +164,14 @@ model KnowledgeArea {
 }
 
 model Assessment {
-  id          String @id @default(uuid())
-  type        String @unique
-  title       String
-  subtitle    String?
-  description String?
-  status      String @default("published")
+  id           String  @id @default(uuid())
+  type         String  @unique
+  title        String
+  subtitle     String?
+  description  String?
+  heroImageUrl String?
+  heroImageAlt String?
+  status       String  @default("published")
 
   questions   Question[]
   attempts    AssessmentAttempt[]

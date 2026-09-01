@@ -42,6 +42,24 @@ const updateQuestionSchema = z.object({
     .optional(),
 });
 
+const updateAssessmentSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  subtitle: z
+    .string()
+    .max(500)
+    .nullable()
+    .optional()
+    .transform((val) => (val === undefined ? val : sanitizeMarkdownNullable(val))),
+  description: z
+    .string()
+    .max(2000)
+    .nullable()
+    .optional()
+    .transform((val) => (val === undefined ? val : sanitizeMarkdownNullable(val))),
+  heroImageUrl: z.string().url().nullable().optional(),
+  heroImageAlt: z.string().min(1).max(500).nullable().optional(),
+});
+
 const createQuestionSchema = z.object({
   text: z.string().min(1).max(2000).transform(sanitizeMarkdownField),
   explanation: z
@@ -98,6 +116,7 @@ export default async function adminAssessmentRoutes(app: FastifyInstance) {
         type: true,
         title: true,
         subtitle: true,
+        heroImageUrl: true,
         status: true,
         _count: { select: { questions: true } },
       },
@@ -113,6 +132,80 @@ export default async function adminAssessmentRoutes(app: FastifyInstance) {
         questionCount: a._count.questions,
       })),
     };
+  });
+
+  /** Assessment metadata for CMS editing (intro copy + hero image). */
+  app.get('/:type', { preHandler: requireAdminRead }, async (request) => {
+    const { type } = typeParams.parse(request.params);
+
+    const assessment = await prisma.assessment.findFirst({
+      where: { type },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        subtitle: true,
+        description: true,
+        heroImageUrl: true,
+        heroImageAlt: true,
+        status: true,
+        _count: { select: { questions: true } },
+      },
+    });
+    if (!assessment) throw new AppError(404, 'Assessment not found', 'NOT_FOUND');
+
+    return {
+      assessment: {
+        id: assessment.id,
+        type: assessment.type,
+        title: assessment.title,
+        subtitle: assessment.subtitle,
+        description: assessment.description,
+        heroImageUrl: assessment.heroImageUrl,
+        heroImageAlt: assessment.heroImageAlt,
+        status: assessment.status,
+        questionCount: assessment._count.questions,
+      },
+    };
+  });
+
+  /** Update assessment intro copy and hero image. */
+  app.patch('/:type', { preHandler: requireAdminWrite }, async (request) => {
+    const { type } = typeParams.parse(request.params);
+    const body = updateAssessmentSchema.parse(request.body);
+    const userId = request.user!.id;
+
+    const existing = await prisma.assessment.findFirst({ where: { type } });
+    if (!existing) throw new AppError(404, 'Assessment not found', 'NOT_FOUND');
+
+    const updated = await prisma.assessment.update({
+      where: { id: existing.id },
+      data: {
+        ...(body.title !== undefined ? { title: body.title } : {}),
+        ...(body.subtitle !== undefined ? { subtitle: body.subtitle } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.heroImageUrl !== undefined ? { heroImageUrl: body.heroImageUrl } : {}),
+        ...(body.heroImageAlt !== undefined ? { heroImageAlt: body.heroImageAlt } : {}),
+      },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        subtitle: true,
+        description: true,
+        heroImageUrl: true,
+        heroImageAlt: true,
+        status: true,
+      },
+    });
+
+    await writeAudit(userId, 'admin_assessment_updated', {
+      assessmentId: updated.id,
+      assessmentType: type,
+      fields: Object.keys(body),
+    });
+
+    return { assessment: updated };
   });
 
   /** All questions for an assessment — includes correct answers (admin only). */
