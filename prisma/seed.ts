@@ -399,7 +399,50 @@ type QuestionSeed = {
   options: OptionSeed[];
 };
 
-const startingGrid: QuestionSeed[] = [
+const OPTION_LETTERS = ["A", "B", "C", "D"] as const;
+type OptionLetter = (typeof OPTION_LETTERS)[number];
+
+/** Spread correct answers across A–D — avoids B/C clustering in the app UI. */
+const ASSESSMENT_CORRECT_LETTERS: OptionLetter[] = [
+  "A",
+  "D",
+  "B",
+  "A",
+  "D",
+  "C",
+  "A",
+  "D",
+  "B",
+  "A",
+  "D",
+  "C",
+  "A",
+  "D",
+];
+
+function shuffleQuestionOptions(
+  options: OptionSeed[],
+  targetCorrectLetter: OptionLetter
+): OptionSeed[] {
+  const ordered = OPTION_LETTERS.map((letter) => options.find((o) => o.letter === letter)!);
+  const correctIndex = ordered.findIndex((o) => o.isCorrect);
+  const targetIndex = OPTION_LETTERS.indexOf(targetCorrectLetter);
+  const shift = (correctIndex - targetIndex + 4) % 4;
+
+  return OPTION_LETTERS.map((letter, i) => {
+    const source = ordered[(i + shift) % 4];
+    return { letter, text: source.text, isCorrect: source.isCorrect };
+  });
+}
+
+function shuffleAssessmentQuestions(questions: QuestionSeed[]): QuestionSeed[] {
+  return questions.map((q) => ({
+    ...q,
+    options: shuffleQuestionOptions(q.options, ASSESSMENT_CORRECT_LETTERS[q.orderIndex - 1]!),
+  }));
+}
+
+const startingGridRaw: QuestionSeed[] = [
   {
     orderIndex: 1,
     knowledgeAreaKey: "buying_car",
@@ -578,7 +621,7 @@ const startingGrid: QuestionSeed[] = [
   },
 ];
 
-const finishLine: QuestionSeed[] = [
+const finishLineRaw: QuestionSeed[] = [
   {
     orderIndex: 1,
     knowledgeAreaKey: "buying_car",
@@ -760,6 +803,9 @@ const finishLine: QuestionSeed[] = [
     ],
   },
 ];
+
+const startingGrid = shuffleAssessmentQuestions(startingGridRaw);
+const finishLine = shuffleAssessmentQuestions(finishLineRaw);
 
 // ---------------------------------------------------------------------------
 // 4. Seed logic — idempotent, safe to re-run.
@@ -1046,6 +1092,49 @@ async function seedAssessment(
   }
 }
 
+async function loadKnowledgeAreaIds() {
+  const records = await prisma.knowledgeArea.findMany();
+  return new Map(records.map((r) => [r.key as KnowledgeAreaKey, r.id]));
+}
+
+async function loadModuleIds() {
+  const records = await prisma.module.findMany();
+  return new Map(records.map((r) => [r.slug, r.id]));
+}
+
+async function seedAssessmentsOnly() {
+  console.log("Seeding assessments only (Starting Grid + Finish Line)...");
+  const knowledgeAreaIds = await loadKnowledgeAreaIds();
+  const moduleIds = await loadModuleIds();
+  if (knowledgeAreaIds.size === 0 || moduleIds.size === 0) {
+    throw new Error("Knowledge areas and modules must exist before seeding assessments");
+  }
+
+  console.log("  Starting Grid (14 questions)...");
+  await seedAssessment(
+    "starting_grid",
+    "Safe Start — Starting Grid",
+    "How much do you know about owning and looking after a car?",
+    "14 questions • About 5 minutes • Your starting score will be compared with your Finish Line score.",
+    startingGrid,
+    knowledgeAreaIds,
+    moduleIds
+  );
+
+  console.log("  Finish Line (14 questions)...");
+  await seedAssessment(
+    "finish_line",
+    "Finish Line Knowledge Check",
+    null,
+    "14 questions • About 5 minutes • Let's see what you've learned.",
+    finishLine,
+    knowledgeAreaIds,
+    moduleIds
+  );
+
+  console.log("Assessment seed complete ✅");
+}
+
 async function main() {
   console.log("Seeding knowledge areas...");
   const knowledgeAreaIds = await seedKnowledgeAreas();
@@ -1086,9 +1175,12 @@ async function main() {
   console.log("Seed complete ✅");
 }
 
-main()
+const assessmentsOnly = process.argv.includes("--assessments-only");
+const runSeed = assessmentsOnly ? seedAssessmentsOnly() : main();
+
+runSeed
   .catch((err) => {
-    console.error("Seed failed:", err);
+    console.error(assessmentsOnly ? "Assessment seed failed:" : "Seed failed:", err);
     process.exitCode = 1;
   })
   .finally(async () => {
