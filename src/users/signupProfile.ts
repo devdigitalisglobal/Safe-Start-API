@@ -4,6 +4,36 @@ export const AU_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'] a
 
 export type AuState = (typeof AU_STATES)[number];
 
+/**
+ * Education type and licence status (client revision, Sep 2026).
+ * Keys are stable — only the display labels may change.
+ */
+export const EDUCATION_TYPE_VALUES = ['high_school', 'tertiary'] as const;
+export type EducationType = (typeof EDUCATION_TYPE_VALUES)[number];
+
+export const EDUCATION_TYPE_LABELS: Record<EducationType, string> = {
+  high_school: 'High school',
+  tertiary: 'Tertiary',
+};
+
+/** Ordered along the NSW licensing pathway. */
+export const LICENCE_STATUS_VALUES = [
+  'unlicensed',
+  'learner',
+  'provisional_p1',
+  'provisional_p2',
+  'full',
+] as const;
+export type LicenceStatus = (typeof LICENCE_STATUS_VALUES)[number];
+
+export const LICENCE_STATUS_LABELS: Record<LicenceStatus, string> = {
+  unlicensed: 'Not yet licensed',
+  learner: 'L plate (Learner)',
+  provisional_p1: 'P plate – P1 (red)',
+  provisional_p2: 'P plate – P2 (green)',
+  full: 'Full (unrestricted) licence',
+};
+
 /** Normalise to local 04xxxxxxxx format for storage. */
 export function normalizeAuMobile(raw: string): string {
   const digits = raw.replace(/\D/g, '');
@@ -40,6 +70,10 @@ export const signupProfileFields = {
     .refine((value): value is AuState => AU_STATES.includes(value as AuState), {
       message: 'Enter a valid Australian state or territory',
     }),
+  // P1: optional so the current app build keeps working. Flipped to required in P6
+  // once the updated app is released (see SIGNUP-PROFILE-FIELDS-PLAN.md).
+  educationType: z.enum(EDUCATION_TYPE_VALUES).optional(),
+  licenceStatus: z.enum(LICENCE_STATUS_VALUES).optional(),
 };
 
 export function buildFullName(firstName: string, lastName: string): string {

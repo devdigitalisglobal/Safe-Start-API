@@ -7,7 +7,12 @@ import { AppError } from '../middleware/errors.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { env } from '../env.js';
 import { buildPartnerConsentInfo, PARTNER_CONSENT_VERSION } from '../partners/consent.js';
-import { buildFullName, signupProfileFields } from '../users/signupProfile.js';
+import {
+  buildFullName,
+  signupProfileFields,
+  EDUCATION_TYPE_VALUES,
+  LICENCE_STATUS_VALUES,
+} from '../users/signupProfile.js';
 import mfaRecoveryRoutes from './mfaRecovery.js';
 
 const createProfileSchema = z.object({
@@ -22,12 +27,22 @@ const updateProfileSchema = z
     firstName: z.string().trim().min(1).max(50).optional(),
     lastName: z.string().trim().min(1).max(50).optional(),
     fullName: z.string().min(2).max(100).optional(),
+    educationType: z.enum(EDUCATION_TYPE_VALUES).optional(),
+    licenceStatus: z.enum(LICENCE_STATUS_VALUES).optional(),
   })
   .refine(
-    (body) =>
-      (body.firstName !== undefined && body.lastName !== undefined) ||
-      body.fullName !== undefined,
-    { message: 'Provide firstName and lastName together, or fullName' }
+    (body) => {
+      const hasNamePair = body.firstName !== undefined && body.lastName !== undefined;
+      const hasFullName = body.fullName !== undefined;
+      const hasProfileField =
+        body.educationType !== undefined || body.licenceStatus !== undefined;
+      // A lone firstName or lastName is still rejected; anything else is fine.
+      if (body.firstName !== undefined || body.lastName !== undefined) {
+        return hasNamePair;
+      }
+      return hasFullName || hasProfileField;
+    },
+    { message: 'Provide firstName and lastName together, fullName, or a profile field to update' }
   );
 
 const partnerConsentSchema = z.object({
@@ -103,6 +118,8 @@ export default async function userRoutes(app: FastifyInstance) {
         mobile: body.mobile,
         suburb: body.suburb,
         state: body.state,
+        educationType: body.educationType ?? null,
+        licenceStatus: body.licenceStatus ?? null,
         dateOfBirth: dob,
         schoolId,
         invitedAt,
@@ -119,6 +136,8 @@ export default async function userRoutes(app: FastifyInstance) {
         mobile: true,
         suburb: true,
         state: true,
+        educationType: true,
+        licenceStatus: true,
         role: true,
         schoolId: true,
         registeredAt: true,
@@ -126,7 +145,15 @@ export default async function userRoutes(app: FastifyInstance) {
     });
 
     await prisma.event.create({
-      data: { userId: user.id, schoolId, type: 'user_registered' },
+      data: {
+        userId: user.id,
+        schoolId,
+        type: 'user_registered',
+        payload: {
+          educationType: user.educationType,
+          licenceStatus: user.licenceStatus,
+        },
+      },
     });
 
     return reply.status(201).send(user);
@@ -145,6 +172,8 @@ export default async function userRoutes(app: FastifyInstance) {
         mobile: true,
         suburb: true,
         state: true,
+        educationType: true,
+        licenceStatus: true,
         dateOfBirth: true,
         role: true,
         registeredAt: true,
@@ -175,6 +204,8 @@ export default async function userRoutes(app: FastifyInstance) {
       mobile: user.mobile,
       suburb: user.suburb,
       state: user.state,
+      educationType: user.educationType,
+      licenceStatus: user.licenceStatus,
       dateOfBirth: user.dateOfBirth,
       role: user.role,
       registeredAt: user.registeredAt?.toISOString() ?? null,
@@ -260,14 +291,24 @@ export default async function userRoutes(app: FastifyInstance) {
   app.patch('/me', { preHandler: requireAuth }, async (request) => {
     const body = updateProfileSchema.parse(request.body);
 
-    const data =
-      body.firstName !== undefined && body.lastName !== undefined
-        ? {
-            firstName: body.firstName,
-            lastName: body.lastName,
-            fullName: buildFullName(body.firstName, body.lastName),
-          }
-        : { fullName: body.fullName! };
+    const data: {
+      firstName?: string;
+      lastName?: string;
+      fullName?: string;
+      educationType?: string;
+      licenceStatus?: string;
+    } = {};
+
+    if (body.firstName !== undefined && body.lastName !== undefined) {
+      data.firstName = body.firstName;
+      data.lastName = body.lastName;
+      data.fullName = buildFullName(body.firstName, body.lastName);
+    } else if (body.fullName !== undefined) {
+      data.fullName = body.fullName;
+    }
+
+    if (body.educationType !== undefined) data.educationType = body.educationType;
+    if (body.licenceStatus !== undefined) data.licenceStatus = body.licenceStatus;
 
     return prisma.user.update({
       where: { id: request.user!.id },
@@ -278,6 +319,8 @@ export default async function userRoutes(app: FastifyInstance) {
         fullName: true,
         firstName: true,
         lastName: true,
+        educationType: true,
+        licenceStatus: true,
       },
     });
   });
@@ -313,6 +356,8 @@ export default async function userRoutes(app: FastifyInstance) {
           mobile: null,
           suburb: null,
           state: null,
+          educationType: null,
+          licenceStatus: null,
           dateOfBirth: null,
           schoolId: null,
           partnerMemberRef: null,

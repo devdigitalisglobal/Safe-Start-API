@@ -51,6 +51,8 @@ model User {
   mobile            String?
   suburb            String?
   state             String?
+  educationType     String?
+  licenceStatus     String?
   dateOfBirth       DateTime?
   schoolId          String?
   partnerId         String?
