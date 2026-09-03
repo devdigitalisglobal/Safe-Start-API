@@ -19,6 +19,27 @@ import {
   pctFromAreaScores,
 } from './helpers.js';
 import type { DashboardSharedContext } from './context.js';
+import {
+  EDUCATION_TYPE_VALUES,
+  EDUCATION_TYPE_LABELS,
+  LICENCE_STATUS_VALUES,
+  LICENCE_STATUS_LABELS,
+} from '../users/signupProfile.js';
+
+/** Turn a groupBy result into an ordered, labelled breakdown with an "unknown" bucket for null. */
+function buildBreakdown<K extends string>(
+  values: readonly K[],
+  labels: Record<K, string>,
+  rows: { value: string | null; count: number }[]
+) {
+  const byKey = new Map(rows.map((r) => [r.value, r.count]));
+  const items = values.map((key) => ({
+    key,
+    label: labels[key],
+    count: byKey.get(key) ?? 0,
+  }));
+  return { items, unknown: byKey.get(null) ?? 0 };
+}
 
 export async function computeReach(scope: DashboardScope, filters: DashboardFilters) {
   const range = dateRange(filters);
@@ -39,6 +60,8 @@ export async function computeReach(scope: DashboardScope, filters: DashboardFilt
     invitationsAccepted,
     mauFromActivity,
     mauFromSessions,
+    educationGroups,
+    licenceGroups,
   ] = await Promise.all([
     prisma.user.count({ where: registeredWhere }),
     prisma.user.count({ where: studentScope }),
@@ -69,7 +92,48 @@ export async function computeReach(scope: DashboardScope, filters: DashboardFilt
         ...eventScope,
       },
     }).then((rows) => rows.length),
+    prisma.user.groupBy({
+      by: ['educationType'],
+      where: studentScope,
+      _count: { _all: true },
+    }),
+    prisma.user.groupBy({
+      by: ['licenceStatus'],
+      where: studentScope,
+      _count: { _all: true },
+    }),
   ]);
+
+  const educationRows = educationGroups.map((g) => ({
+    value: g.educationType,
+    count: g._count._all,
+  }));
+  const licenceRows = licenceGroups.map((g) => ({
+    value: g.licenceStatus,
+    count: g._count._all,
+  }));
+
+  const demographicsSuppressed = isSmallSchoolCohort(scope, totalStudentsInScope);
+  const demographics = demographicsSuppressed
+    ? {
+        suppressed: true as const,
+        reason: `Fewer than ${MIN_COHORT_SIZE} students in this cohort — breakdown withheld to protect privacy.`,
+        educationType: null,
+        licenceStatus: null,
+      }
+    : {
+        suppressed: false as const,
+        educationType: buildBreakdown(
+          EDUCATION_TYPE_VALUES,
+          EDUCATION_TYPE_LABELS,
+          educationRows
+        ),
+        licenceStatus: buildBreakdown(
+          LICENCE_STATUS_VALUES,
+          LICENCE_STATUS_LABELS,
+          licenceRows
+        ),
+      };
 
   const mau = Math.max(mauFromActivity, mauFromSessions);
   const smallCohort = scope.schoolId !== undefined && totalStudentsInScope < MIN_COHORT_SIZE;
@@ -125,6 +189,7 @@ export async function computeReach(scope: DashboardScope, filters: DashboardFilt
       suppressed: mauResult.suppressed,
       ...(mauResult.suppressed ? { reason: mauResult.reason } : {}),
     },
+    demographics,
   };
 }
 

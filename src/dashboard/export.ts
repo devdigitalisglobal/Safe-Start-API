@@ -62,6 +62,12 @@ export function buildDashboardCsv(payload: {
       suppressed?: boolean;
     };
     monthlyActiveUsers?: { count: number | null; suppressed?: boolean };
+    demographics?: {
+      suppressed?: boolean;
+      reason?: string;
+      educationType?: { items: { label: string; count: number }[]; unknown: number } | null;
+      licenceStatus?: { items: { label: string; count: number }[]; unknown: number } | null;
+    } | null;
   } | null;
 
   const engagement = payload.engagement as {
@@ -139,6 +145,28 @@ export function buildDashboardCsv(payload: {
       metric('Monthly active users', reach.monthlyActiveUsers?.count, reach.monthlyActiveUsers?.suppressed),
     ];
     lines.push(...section('Reach', reachLines).split('\n'));
+
+    const demographics = reach.demographics;
+    if (demographics) {
+      const demoLines: string[] = [];
+      if (demographics.suppressed) {
+        demoLines.push(row(['Status', WITHHELD]));
+        demoLines.push(row(['Reason', demographics.reason ?? 'Cohort too small']));
+      } else {
+        demoLines.push(row(['Education type', 'Learners']));
+        for (const item of demographics.educationType?.items ?? []) {
+          demoLines.push(row([item.label, item.count]));
+        }
+        demoLines.push(row(['Not specified', demographics.educationType?.unknown ?? 0]));
+        demoLines.push('');
+        demoLines.push(row(['Licence status', 'Learners']));
+        for (const item of demographics.licenceStatus?.items ?? []) {
+          demoLines.push(row([item.label, item.count]));
+        }
+        demoLines.push(row(['Not specified', demographics.licenceStatus?.unknown ?? 0]));
+      }
+      lines.push(...section('Learner profile', demoLines).split('\n'));
+    }
   }
 
   if (engagement?.suppressed) {
