@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { requireAuth } from './auth.js';
 import { AppError } from './errors.js';
 import { isDashboardRole } from '../lib/roles.js';
+import { requirePortalAal2 } from './portalMfa.js';
 
 /** Dashboard routes — staff, super admin, partner, or school_admin. Never students. */
 export async function requireDashboardAccess(
@@ -13,4 +14,6 @@ export async function requireDashboardAccess(
   if (!request.user || !isDashboardRole(request.user.role)) {
     throw new AppError(403, 'Dashboard access denied', 'FORBIDDEN');
   }
+
+  await requirePortalAal2(request);
 }
