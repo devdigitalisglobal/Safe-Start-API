@@ -52,11 +52,9 @@ const schema = z
   )
   .refine(
     (data) =>
-      data.NODE_ENV !== 'production' ||
-      (Boolean(data.UPSTASH_REDIS_REST_URL) && Boolean(data.UPSTASH_REDIS_REST_TOKEN)),
+      Boolean(data.UPSTASH_REDIS_REST_URL) === Boolean(data.UPSTASH_REDIS_REST_TOKEN),
     {
-      message:
-        'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production',
+      message: 'Set both UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN, or neither',
       path: ['UPSTASH_REDIS_REST_URL'],
     }
   );
@@ -88,3 +86,14 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+export const hasUpstashRedis = Boolean(
+  env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN
+);
+
+if (env.NODE_ENV === 'production' && !hasUpstashRedis) {
+  console.warn(
+    '[safe-start-api] UPSTASH_REDIS not configured — in-memory rate limits only. ' +
+      'Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN on Vercel before pen test.'
+  );
+}
