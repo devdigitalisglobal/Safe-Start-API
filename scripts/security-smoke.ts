@@ -90,6 +90,12 @@ function containsIsCorrect(value: unknown): boolean {
   return /"isCorrect"\s*:/.test(text);
 }
 
+function errorCode(json: unknown): string | undefined {
+  if (!json || typeof json !== 'object') return undefined;
+  const code = (json as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
 async function runAssessmentLeakChecks(token: string) {
   for (const type of ['starting_grid', 'finish_line'] as const) {
     const { status, json } = await api(token, 'GET', `/assessments/${type}`);
@@ -191,6 +197,135 @@ async function runAuditScopeCheck() {
   );
 }
 
+async function runStartingGridContentGate(token: string) {
+  const gates = await api(token, 'GET', '/assessments/status/gates');
+  if (gates.status !== 200) {
+    fail('GET /assessments/status/gates', `HTTP ${gates.status}`);
+    return;
+  }
+
+  const completed = (gates.json as { startingGrid?: { completed?: boolean } })?.startingGrid
+    ?.completed;
+
+  if (completed) {
+    pass('GET /modules/:id (SG gate)', 'Learner completed Starting Grid — gate not applicable');
+    return;
+  }
+
+  const modules = await api(token, 'GET', '/modules');
+  if (modules.status !== 200) {
+    fail('GET /modules (SG gate setup)', `HTTP ${modules.status}`);
+    return;
+  }
+
+  const firstId = (modules.json as { modules?: { id: string }[] })?.modules?.[0]?.id;
+  if (!firstId) {
+    fail('GET /modules/:id (SG gate)', 'No published modules to test');
+    return;
+  }
+
+  const detail = await api(token, 'GET', `/modules/${firstId}`);
+  if (detail.status === 403 && errorCode(detail.json) === 'GRID_REQUIRED') {
+    pass('GET /modules/:id (SG gate)', 'Lesson content blocked before Starting Grid');
+  } else {
+    fail(
+      'GET /modules/:id (SG gate)',
+      `Expected 403 GRID_REQUIRED, got ${detail.status} (${errorCode(detail.json) ?? 'no code'})`
+    );
+  }
+}
+
+async function runStepOrderCheck(token: string) {
+  const gates = await api(token, 'GET', '/assessments/status/gates');
+  const sgDone = (gates.json as { startingGrid?: { completed?: boolean } })?.startingGrid?.completed;
+
+  if (!sgDone) {
+    pass('POST /progress/modules/:id/step order', 'Skipped — Starting Grid not complete');
+    return;
+  }
+
+  const modules = await api(token, 'GET', '/modules');
+  const firstId = (modules.json as { modules?: { id: string }[] })?.modules?.[0]?.id;
+  if (!firstId) {
+    fail('POST /progress/modules/:id/step order', 'No published modules');
+    return;
+  }
+
+  await api(token, 'POST', `/progress/modules/${firstId}/start`, {});
+
+  const skip = await api(token, 'POST', `/progress/modules/${firstId}/step`, { stepIndex: 99 });
+  if (skip.status === 403 && errorCode(skip.json) === 'STEP_OUT_OF_ORDER') {
+    pass('POST /progress/modules/:id/step order', 'Cannot skip ahead to arbitrary step');
+  } else if (skip.status === 400 && errorCode(skip.json) === 'BAD_STEP') {
+    pass('POST /progress/modules/:id/step order', 'Invalid step index rejected');
+  } else {
+    fail(
+      'POST /progress/modules/:id/step order',
+      `Expected STEP_OUT_OF_ORDER or BAD_STEP, got ${skip.status} (${errorCode(skip.json) ?? 'no code'})`
+    );
+  }
+}
+
+async function runHealthDbLeakCheck() {
+  const res = await fetch(`${API_URL}/health/db`);
+  const json = (await res.json()) as { hint?: string; database?: string };
+  const isProdTarget =
+    process.env.EXPECT_PRODUCTION === 'true' ||
+    /vercel\.app|safestartdrivers\.com\.au/i.test(API_URL);
+
+  if (isProdTarget && 'hint' in json) {
+    fail('GET /health/db', 'Production-style target returned error hint field');
+  } else if (res.status === 503 && json.hint) {
+    pass('GET /health/db', 'Dev/staging may include hint on failure');
+  } else {
+    pass('GET /health/db', res.ok ? 'Connected' : 'No hint on failure response');
+  }
+}
+
+async function runStaffMfaGateCheck() {
+  const email = process.env.TEST_STAFF_EMAIL;
+  const password = process.env.TEST_STAFF_PASSWORD;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+
+  if (!email || !password || !supabaseUrl || !anonKey) {
+    pass(
+      'Staff MFA gate',
+      'Skipped — set TEST_STAFF_EMAIL and TEST_STAFF_PASSWORD for AAL1 staff JWT test'
+    );
+    return;
+  }
+
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!authRes.ok) {
+    fail('Staff MFA gate', `Staff sign-in failed HTTP ${authRes.status}`);
+    return;
+  }
+
+  const body = (await authRes.json()) as { access_token?: string };
+  if (!body.access_token) {
+    fail('Staff MFA gate', 'No staff access_token');
+    return;
+  }
+
+  const admin = await api(body.access_token, 'GET', '/admin/modules');
+  if (admin.status === 403 && errorCode(admin.json) === 'MFA_REQUIRED') {
+    pass('Staff MFA gate', 'AAL1 staff token blocked from admin reads');
+  } else if (process.env.PORTAL_MFA_REQUIRED === 'false') {
+    pass('Staff MFA gate', 'PORTAL_MFA_REQUIRED=false — MFA not enforced locally');
+  } else {
+    fail(
+      'Staff MFA gate',
+      `Expected 403 MFA_REQUIRED, got ${admin.status} (${errorCode(admin.json) ?? 'no code'})`
+    );
+  }
+}
+
 async function runLoadBaseline() {
   const start = Date.now();
   const runs = 20;
@@ -219,8 +354,12 @@ async function main() {
 
   await runAssessmentLeakChecks(token);
   await runStartingGridAnswerChecks(token);
+  await runStartingGridContentGate(token);
+  await runStepOrderCheck(token);
   await runIdorChecks(token);
   await runAuditScopeCheck();
+  await runHealthDbLeakCheck();
+  await runStaffMfaGateCheck();
   await runLoadBaseline();
 
   printResults();
