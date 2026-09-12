@@ -1,12 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { rateLimit } from '../middleware/rateLimit.js';
 
 const SESSION_GAP_MS = 30 * 60 * 1000; // 30 minutes — one event per app open, not per request
 
 export default async function sessionRoutes(app: FastifyInstance) {
   /** Record an app session for MAU / engagement metrics. Idempotent within the gap window. */
-  app.post('/start', { preHandler: requireAuth }, async (request) => {
+  app.post('/start', {
+    preHandler: [
+      requireAuth,
+      rateLimit({ keyPrefix: 'session-start', limit: 30, windowMs: 60_000, by: 'user' }),
+    ],
+  }, async (request) => {
     const userId = request.user!.id;
     const cutoff = new Date(Date.now() - SESSION_GAP_MS);
 

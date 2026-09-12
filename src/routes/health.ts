@@ -28,12 +28,22 @@ export default async function healthRoutes(app: FastifyInstance) {
       const hint =
         err instanceof Error ? err.message.replace(/password[^\s]*/gi, '[redacted]') : 'unknown';
       request.log.error({ err }, 'Database health check failed');
-      return reply.status(503).send({
+      const payload: {
+        status: 'error';
+        database: 'disconnected';
+        requestId: string;
+        hint?: string;
+      } = {
         status: 'error',
         database: 'disconnected',
-        hint: hint.slice(0, 200),
         requestId: request.id,
-      });
+      };
+
+      if (env.NODE_ENV !== 'production') {
+        payload.hint = hint.slice(0, 200);
+      }
+
+      return reply.status(503).send(payload);
     }
   });
 

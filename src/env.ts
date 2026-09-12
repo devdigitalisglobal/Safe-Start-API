@@ -49,6 +49,16 @@ const schema = z
       message: 'MFA_RECOVERY_PEPPER is required in production (min 32 chars)',
       path: ['MFA_RECOVERY_PEPPER'],
     }
+  )
+  .refine(
+    (data) =>
+      data.NODE_ENV !== 'production' ||
+      (Boolean(data.UPSTASH_REDIS_REST_URL) && Boolean(data.UPSTASH_REDIS_REST_TOKEN)),
+    {
+      message:
+        'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production',
+      path: ['UPSTASH_REDIS_REST_URL'],
+    }
   );
 
 function formatEnvErrors(error: z.ZodError): string {

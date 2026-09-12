@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errors.js';
+import { assertStartingGridComplete } from '../lib/learnerGates.js';
+import { rateLimit } from '../middleware/rateLimit.js';
 
 const moduleParams = z.object({ id: z.string().uuid() });
 
@@ -27,24 +29,6 @@ const quizSubmitSchema = z.object({
     .min(1)
     .max(10),
 });
-
-/** Guard: modules are locked until the Starting Grid is complete. */
-async function assertStartingGridComplete(userId: string) {
-  const sg = await prisma.assessment.findFirst({
-    where: { type: 'starting_grid' },
-    select: { id: true },
-  });
-  if (!sg) return;
-
-  const done = await prisma.assessmentAttempt.findFirst({
-    where: { userId, assessmentId: sg.id, completedAt: { not: null } },
-    select: { id: true },
-  });
-
-  if (!done) {
-    throw new AppError(403, 'Complete the Starting Grid first', 'GRID_REQUIRED');
-  }
-}
 
 export default async function progressRoutes(app: FastifyInstance) {
   /** Overall progress summary. */
@@ -152,15 +136,32 @@ export default async function progressRoutes(app: FastifyInstance) {
     const body = stepSchema.parse(request.body);
     const userId = request.user!.id;
 
-    const existing = await prisma.moduleProgress.findUnique({
-      where: { userId_moduleId: { userId, moduleId: id } },
-    });
+    const [existing, module] = await Promise.all([
+      prisma.moduleProgress.findUnique({
+        where: { userId_moduleId: { userId, moduleId: id } },
+      }),
+      prisma.module.findFirst({
+        where: { id, status: 'published' },
+        select: { _count: { select: { lessons: true } } },
+      }),
+    ]);
+
     if (!existing) throw new AppError(400, 'Module not started', 'NOT_STARTED');
+    if (!module) throw new AppError(404, 'Module not found', 'NOT_FOUND');
+
+    const maxStepIndex = Math.max(0, module._count.lessons - 1);
+    if (body.stepIndex > maxStepIndex) {
+      throw new AppError(400, 'Invalid step index', 'BAD_STEP');
+    }
+
+    const furthestAllowed = existing.lastStepIndex + 1;
+    if (body.stepIndex > furthestAllowed) {
+      throw new AppError(403, 'Complete the previous step first', 'STEP_OUT_OF_ORDER');
+    }
 
     return prisma.moduleProgress.update({
       where: { userId_moduleId: { userId, moduleId: id } },
       data: {
-        // Only move forward — going back shouldn't reset the resume point
         lastStepIndex: Math.max(existing.lastStepIndex, body.stepIndex),
         timeSpentSeconds: existing.timeSpentSeconds + (body.timeSpentSeconds ?? 0),
       },
@@ -343,7 +344,12 @@ export default async function progressRoutes(app: FastifyInstance) {
   });
 
   /** Record a lesson step view — powers drop-off analysis. */
-  app.post('/lessons/view', { preHandler: requireAuth }, async (request) => {
+  app.post('/lessons/view', {
+    preHandler: [
+      requireAuth,
+      rateLimit({ keyPrefix: 'lesson-view', limit: 120, windowMs: 60_000, by: 'user' }),
+    ],
+  }, async (request) => {
     const body = lessonViewSchema.parse(request.body);
     const userId = request.user!.id;
 
