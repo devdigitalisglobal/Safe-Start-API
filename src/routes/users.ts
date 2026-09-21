@@ -1,11 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { verifyToken, requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errors.js';
 import { rateLimit } from '../middleware/rateLimit.js';
-import { env } from '../env.js';
 import { buildPartnerConsentInfo, PARTNER_CONSENT_VERSION } from '../partners/consent.js';
 import {
   buildFullName,
@@ -13,6 +11,7 @@ import {
   EDUCATION_TYPE_VALUES,
   LICENCE_STATUS_VALUES,
 } from '../users/signupProfile.js';
+import { anonymiseLearnerAccount } from '../services/learnerAdmin.js';
 import mfaRecoveryRoutes from './mfaRecovery.js';
 
 const createProfileSchema = z.object({
@@ -342,64 +341,13 @@ export default async function userRoutes(app: FastifyInstance) {
     const userId = request.user!.id;
     const schoolId = request.user!.schoolId;
 
-    const anonymisedEmail = `deleted-${randomBytes(16).toString('hex')}@deleted.local`;
-
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: {
-          deletedAt: new Date(),
-          email: anonymisedEmail,
-          fullName: 'Deleted user',
-          firstName: null,
-          lastName: null,
-          mobile: null,
-          suburb: null,
-          state: null,
-          educationType: null,
-          licenceStatus: null,
-          dateOfBirth: null,
-          schoolId: null,
-          partnerMemberRef: null,
-          partnerConsentVersion: null,
-          partnerConsentAt: null,
-          partnerConsentGranted: null,
-          consentVersion: null,
-          consentAt: null,
-          guardianConsentAt: null,
-          invitedAt: null,
-          lastActiveAt: null,
-          expoPushToken: null,
-        },
-      }),
-      prisma.event.updateMany({ where: { userId }, data: { userId: null } }),
-      prisma.event.create({
-        data: {
-          type: 'account_deleted',
-          schoolId,
-          occurredAt: new Date(),
-        },
-      }),
-    ]);
-
-    const authDelete = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-      method: 'DELETE',
-      headers: {
-        apikey: env.SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      },
-    });
-
-    if (!authDelete.ok) {
-      request.log.warn(
-        { userId, status: authDelete.status },
-        'Supabase auth user delete failed after profile anonymisation'
-      );
-      throw new AppError(
-        502,
-        'Account deletion could not be completed. Please contact support.',
-        'AUTH_DELETE_FAILED'
-      );
+    try {
+      await anonymiseLearnerAccount(userId, { schoolId });
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'AUTH_DELETE_FAILED') {
+        request.log.warn({ userId }, 'Supabase auth user delete failed after profile anonymisation');
+      }
+      throw err;
     }
 
     return reply.status(204).send();

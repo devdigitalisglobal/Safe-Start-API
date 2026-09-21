@@ -71,6 +71,8 @@ model User {
   partnerConsentGranted Boolean?
 
   deletedAt         DateTime?
+  suspendedAt       DateTime?
+  suspendedReason   String?
 
   expoPushToken     String?
 
@@ -87,6 +89,7 @@ model User {
   @@index([schoolId])
   @@index([partnerId])
   @@index([registeredAt])
+  @@index([suspendedAt])
 }
 
 // ---------- Content ----------

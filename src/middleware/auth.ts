@@ -73,6 +73,7 @@ export async function requireAuth(request: FastifyRequest, _reply: FastifyReply)
       schoolId: true,
       partnerId: true,
       deletedAt: true,
+      suspendedAt: true,
     },
   });
 
@@ -82,6 +83,10 @@ export async function requireAuth(request: FastifyRequest, _reply: FastifyReply)
 
   if (user.deletedAt) {
     throw new AppError(403, 'Account has been deleted', 'DELETED');
+  }
+
+  if (user.suspendedAt) {
+    throw new AppError(403, 'Account has been suspended', 'SUSPENDED');
   }
 
   request.user = {
@@ -125,10 +130,11 @@ export async function optionalAuth(request: FastifyRequest, _reply: FastifyReply
       schoolId: true,
       partnerId: true,
       deletedAt: true,
+      suspendedAt: true,
     },
   });
 
-  if (!user || user.deletedAt) return;
+  if (!user || user.deletedAt || user.suspendedAt) return;
 
   request.user = {
     id: user.id,
