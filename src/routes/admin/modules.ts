@@ -381,6 +381,9 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
 
     validateQuizPayload(body.questions);
 
+    /** Sydney pooler + many row updates can exceed Prisma's default 5s interactive tx timeout. */
+    const adminWriteTransaction = { maxWait: 10_000, timeout: 30_000 } as const;
+
     await prisma.$transaction(async (tx) => {
       const existing = await tx.moduleQuizQuestion.findMany({
         where: { moduleId: id },
@@ -390,44 +393,51 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
       for (const question of body.questions) {
         let row = existing.find((item) => item.orderIndex === question.orderIndex);
         if (row) {
-          row = await tx.moduleQuizQuestion.update({
-            where: { id: row.id },
-            data: { text: question.text },
-            include: { options: true },
-          });
+          if (row.text !== question.text) {
+            await tx.moduleQuizQuestion.update({
+              where: { id: row.id },
+              data: { text: question.text },
+            });
+            row = { ...row, text: question.text };
+          }
         } else {
           row = await tx.moduleQuizQuestion.create({
             data: { moduleId: id, orderIndex: question.orderIndex, text: question.text },
             include: { options: true },
           });
+          existing.push(row);
         }
 
-        for (const letter of QUIZ_LETTERS) {
-          const payload = question.options.find((o) => o.letter === letter)!;
-          const existingOption = row.options.find((o) => o.letter === letter);
-          if (existingOption) {
-            await tx.moduleQuizOption.update({
-              where: { id: existingOption.id },
-              data: { text: payload.text, isCorrect: payload.isCorrect },
-            });
-          } else {
-            await tx.moduleQuizOption.create({
-              data: {
-                questionId: row.id,
-                letter,
-                text: payload.text,
-                isCorrect: payload.isCorrect,
-              },
-            });
-          }
-        }
+        await Promise.all(
+          QUIZ_LETTERS.map(async (letter) => {
+            const payload = question.options.find((o) => o.letter === letter)!;
+            const existingOption = row!.options.find((o) => o.letter === letter);
+            if (existingOption) {
+              await tx.moduleQuizOption.update({
+                where: { id: existingOption.id },
+                data: { text: payload.text, isCorrect: payload.isCorrect },
+              });
+            } else {
+              await tx.moduleQuizOption.create({
+                data: {
+                  questionId: row!.id,
+                  letter,
+                  text: payload.text,
+                  isCorrect: payload.isCorrect,
+                },
+              });
+            }
+          })
+        );
       }
 
       const keepOrderIndexes = new Set<number>(body.questions.map((q) => q.orderIndex));
-      for (const stale of existing.filter((q) => !keepOrderIndexes.has(q.orderIndex))) {
-        await tx.moduleQuizQuestion.delete({ where: { id: stale.id } });
-      }
-    });
+      await Promise.all(
+        existing
+          .filter((q) => !keepOrderIndexes.has(q.orderIndex))
+          .map((stale) => tx.moduleQuizQuestion.delete({ where: { id: stale.id } }))
+      );
+    }, adminWriteTransaction);
 
     await writeAudit(userId, 'admin_module_quiz_updated', { moduleId: id });
 

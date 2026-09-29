@@ -45,12 +45,25 @@ function mapResourceItem(item: {
   };
 }
 
+const optionalExternalUrl = z.preprocess(
+  (val) => {
+    if (val === undefined) return undefined;
+    if (val === null) return null;
+    if (typeof val !== 'string') return val;
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  },
+  z.string().url().nullable().optional()
+);
+
 const createSchema = z.object({
   category: z.enum(RESOURCE_CATEGORIES),
   title: z.string().min(1).max(200),
   summary: markdownOptional(500),
   body: markdownOptional(20000),
-  url: z.string().url().nullable().optional(),
+  url: optionalExternalUrl,
   orderIndex: z.number().int().min(1).optional(),
   status: z.enum(['draft', 'published']).optional(),
 });
