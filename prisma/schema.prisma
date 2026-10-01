@@ -80,7 +80,6 @@ model User {
   partner           Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   moduleProgress    ModuleProgress[]
   lessonViews       LessonView[]
-  attempts          AssessmentAttempt[]
   moduleQuizAnswers ModuleQuizAnswer[]
   events            Event[]
   mediaAssets       MediaAsset[]
@@ -108,7 +107,6 @@ model Module {
 
   outcomes     ModuleOutcome[]
   lessons      Lesson[]
-  questions    Question[]
   quizQuestions ModuleQuizQuestion[]
   quizAnswers  ModuleQuizAnswer[]
   progress     ModuleProgress[]
@@ -154,104 +152,6 @@ model LessonTakeaway {
   lesson     Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@index([lessonId])
-}
-
-// ---------- Assessments ----------
-
-model KnowledgeArea {
-  id         String @id @default(uuid())
-  key        String @unique
-  name       String
-  orderIndex Int
-
-  questions  Question[]
-  answers    AssessmentAnswer[]
-}
-
-model Assessment {
-  id           String  @id @default(uuid())
-  type         String  @unique
-  title        String
-  subtitle     String?
-  description  String?
-  heroImageUrl String?
-  heroImageAlt String?
-  status       String  @default("published")
-
-  questions   Question[]
-  attempts    AssessmentAttempt[]
-}
-
-model Question {
-  id              String @id @default(uuid())
-  assessmentId    String
-  knowledgeAreaId String
-  moduleId        String?
-  orderIndex      Int
-  text            String
-  explanation     String?
-
-  assessment      Assessment    @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  knowledgeArea   KnowledgeArea @relation(fields: [knowledgeAreaId], references: [id])
-  module          Module?       @relation(fields: [moduleId], references: [id])
-  options         QuestionOption[]
-  answers         AssessmentAnswer[]
-
-  @@index([assessmentId, orderIndex])
-  @@index([knowledgeAreaId])
-  @@index([moduleId])
-}
-
-model QuestionOption {
-  id         String  @id @default(uuid())
-  questionId String
-  letter     String
-  text       String
-  isCorrect  Boolean @default(false)
-
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  answers    AssessmentAnswer[]
-
-  @@index([questionId])
-}
-
-model AssessmentAttempt {
-  id             String    @id @default(uuid())
-  userId         String
-  assessmentId   String
-  attemptNumber  Int       @default(1)
-  startedAt      DateTime  @default(now())
-  completedAt    DateTime?
-  totalScore     Int?
-  totalQuestions Int?
-
-  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assessment     Assessment @relation(fields: [assessmentId], references: [id])
-  answers        AssessmentAnswer[]
-
-  @@index([userId, assessmentId])
-  @@index([assessmentId])
-  @@index([completedAt])
-}
-
-model AssessmentAnswer {
-  id               String   @id @default(uuid())
-  attemptId        String
-  questionId       String
-  selectedOptionId String?
-  isCorrect        Boolean
-  knowledgeAreaId  String
-  answeredAt       DateTime @default(now())
-
-  attempt          AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  question         Question          @relation(fields: [questionId], references: [id])
-  selectedOption   QuestionOption?   @relation(fields: [selectedOptionId], references: [id])
-  knowledgeArea    KnowledgeArea     @relation(fields: [knowledgeAreaId], references: [id])
-
-  @@unique([attemptId, questionId])
-  @@index([questionId])
-  @@index([knowledgeAreaId])
-  @@index([selectedOptionId])
 }
 
 // ---------- Progress ----------

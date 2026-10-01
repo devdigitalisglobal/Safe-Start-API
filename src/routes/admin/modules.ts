@@ -8,7 +8,6 @@ import {
 } from '../../middleware/admin.js';
 import { AppError } from '../../middleware/errors.js';
 import { writeAudit } from './writeAudit.js';
-import { ensureKnowledgeAreaForModule } from '../../content/syncKnowledgeArea.js';
 import { sanitizeMarkdownField, sanitizeMarkdownNullable } from '../../lib/markdownSanitize.js';
 
 const markdownOptional = (max: number) =>
@@ -262,7 +261,6 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
       return module;
     });
 
-    await ensureKnowledgeAreaForModule(created);
 
     await writeAudit(userId, 'admin_module_created', {
       moduleId: created.id,
@@ -298,7 +296,6 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
       select: { id: true, slug: true, title: true, orderIndex: true },
     });
     for (const module of updatedModules) {
-      await ensureKnowledgeAreaForModule(module);
     }
 
     await writeAudit(userId, 'admin_modules_reordered', {
@@ -498,7 +495,6 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
       return module;
     });
 
-    await ensureKnowledgeAreaForModule(updated);
 
     await writeAudit(userId, 'admin_module_updated', {
       moduleId: id,
@@ -725,19 +721,7 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
         await tx.lessonView.deleteMany({ where: { lessonId: { in: lessonIds } } });
       }
       await tx.moduleProgress.deleteMany({ where: { moduleId: id } });
-      await tx.question.updateMany({
-        where: { moduleId: id },
-        data: { moduleId: null },
-      });
       await tx.module.delete({ where: { id } });
-
-      const knowledgeArea = await tx.knowledgeArea.findUnique({
-        where: { key: existing.slug },
-        select: { id: true, _count: { select: { questions: true, answers: true } } },
-      });
-      if (knowledgeArea && knowledgeArea._count.questions === 0 && knowledgeArea._count.answers === 0) {
-        await tx.knowledgeArea.delete({ where: { id: knowledgeArea.id } });
-      }
 
       const remaining = await tx.module.findMany({
         orderBy: { orderIndex: 'asc' },
@@ -865,8 +849,6 @@ export default async function adminModuleRoutes(app: FastifyInstance) {
       where: { id },
       data: { status: 'published' },
     });
-
-    await ensureKnowledgeAreaForModule(module);
 
     await writeAudit(userId, 'admin_module_published', { moduleId: id });
 

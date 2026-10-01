@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errors.js';
-import { assertStartingGridComplete } from '../lib/learnerGates.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 
 const moduleParams = z.object({ id: z.string().uuid() });
@@ -87,8 +86,6 @@ export default async function progressRoutes(app: FastifyInstance) {
   app.post('/modules/:id/start', { preHandler: requireAuth }, async (request) => {
     const { id } = moduleParams.parse(request.params);
     const userId = request.user!.id;
-
-    await assertStartingGridComplete(userId);
 
     const module = await prisma.module.findFirst({
       where: { id, status: 'published' },

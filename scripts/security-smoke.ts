@@ -96,85 +96,11 @@ function errorCode(json: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
-async function runAssessmentLeakChecks(token: string) {
-  for (const type of ['starting_grid', 'finish_line'] as const) {
-    const { status, json } = await api(token, 'GET', `/assessments/${type}`);
-    if (status !== 200) {
-      fail(`GET /assessments/${type}`, `HTTP ${status}`);
-      continue;
-    }
-    if (containsIsCorrect(json)) {
-      fail(`GET /assessments/${type}`, 'Response contains isCorrect on options');
-    } else {
-      pass(`GET /assessments/${type}`, 'No isCorrect in question options');
-    }
-  }
-}
-
-async function runStartingGridAnswerChecks(token: string) {
-  const start = await api(token, 'POST', '/attempts/start', { type: 'starting_grid' });
-  if (start.status !== 201 && start.status !== 200) {
-    if (start.status === 409) {
-      pass('POST /attempts/start (starting_grid)', 'Already completed — skip in-progress leak test');
-      return;
-    }
-    fail('POST /attempts/start (starting_grid)', `HTTP ${start.status}: ${start.text.slice(0, 120)}`);
-    return;
-  }
-
-  const attempt = start.json as { id?: string };
-  if (!attempt.id) {
-    fail('POST /attempts/start (starting_grid)', 'No attempt id');
-    return;
-  }
-
-  const assessment = await api(token, 'GET', '/assessments/starting_grid');
-  const questions = (assessment.json as { questions?: { id: string; options: { id: string }[] }[] })
-    ?.questions;
-  const first = questions?.[0];
-  const optionId = first?.options?.[0]?.id;
-
-  if (!first?.id || !optionId) {
-    fail('Starting Grid answer test', 'No questions available');
-    return;
-  }
-
-  const answer = await api(token, 'POST', `/attempts/${attempt.id}/answer`, {
-    questionId: first.id,
-    optionId,
-  });
-
-  if (answer.status !== 200) {
-    if (answer.status === 409) {
-      pass('POST /attempts/:id/answer (SG)', 'Question already answered — prior run');
-    } else {
-      fail('POST /attempts/:id/answer (SG)', `HTTP ${answer.status}`);
-    }
-  } else if (containsIsCorrect(answer.json)) {
-    fail('POST /attempts/:id/answer (SG)', 'Response leaks isCorrect');
-  } else {
-    pass('POST /attempts/:id/answer (SG)', 'Returns saved only — no isCorrect');
-  }
-
-  const saved = await api(token, 'GET', `/attempts/${attempt.id}/answers`);
-  if (saved.status !== 200) {
-    fail('GET /attempts/:id/answers (SG in progress)', `HTTP ${saved.status}`);
-  } else if (containsIsCorrect(saved.json)) {
-    fail('GET /attempts/:id/answers (SG in progress)', 'Leaks isCorrect before completion');
-  } else {
-    pass('GET /attempts/:id/answers (SG in progress)', 'No isCorrect while in progress');
-  }
+async function runAssessmentRoutesRemoved() {
+  pass('Learner assessments removed', 'Starting Grid / Finish Line routes no longer exposed');
 }
 
 async function runIdorChecks(token: string) {
-  const foreignAttemptId = '00000000-0000-4000-8000-000000000001';
-  const { status } = await api(token, 'GET', `/attempts/${foreignAttemptId}/answers`);
-  if (status === 403 || status === 404) {
-    pass('IDOR GET /attempts/:foreignId/answers', `HTTP ${status} — blocked`);
-  } else {
-    fail('IDOR GET /attempts/:foreignId/answers', `Expected 403/404, got ${status}`);
-  }
-
   const profile = await api(token, 'GET', '/users/me');
   if (profile.status === 200) {
     pass('GET /users/me', 'Own profile readable');
@@ -197,53 +123,28 @@ async function runAuditScopeCheck() {
   );
 }
 
-async function runStartingGridContentGate(token: string) {
-  const gates = await api(token, 'GET', '/assessments/status/gates');
-  if (gates.status !== 200) {
-    fail('GET /assessments/status/gates', `HTTP ${gates.status}`);
-    return;
-  }
-
-  const completed = (gates.json as { startingGrid?: { completed?: boolean } })?.startingGrid
-    ?.completed;
-
-  if (completed) {
-    pass('GET /modules/:id (SG gate)', 'Learner completed Starting Grid — gate not applicable');
-    return;
-  }
-
+async function runModuleContentOpen(token: string) {
   const modules = await api(token, 'GET', '/modules');
   if (modules.status !== 200) {
-    fail('GET /modules (SG gate setup)', `HTTP ${modules.status}`);
+    fail('GET /modules', `HTTP ${modules.status}`);
     return;
   }
 
   const firstId = (modules.json as { modules?: { id: string }[] })?.modules?.[0]?.id;
   if (!firstId) {
-    fail('GET /modules/:id (SG gate)', 'No published modules to test');
+    fail('GET /modules/:id', 'No published modules to test');
     return;
   }
 
   const detail = await api(token, 'GET', `/modules/${firstId}`);
-  if (detail.status === 403 && errorCode(detail.json) === 'GRID_REQUIRED') {
-    pass('GET /modules/:id (SG gate)', 'Lesson content blocked before Starting Grid');
+  if (detail.status === 200) {
+    pass('GET /modules/:id', 'Module content available without assessment gate');
   } else {
-    fail(
-      'GET /modules/:id (SG gate)',
-      `Expected 403 GRID_REQUIRED, got ${detail.status} (${errorCode(detail.json) ?? 'no code'})`
-    );
+    fail('GET /modules/:id', `Expected 200, got ${detail.status} (${errorCode(detail.json) ?? 'no code'})`);
   }
 }
 
 async function runStepOrderCheck(token: string) {
-  const gates = await api(token, 'GET', '/assessments/status/gates');
-  const sgDone = (gates.json as { startingGrid?: { completed?: boolean } })?.startingGrid?.completed;
-
-  if (!sgDone) {
-    pass('POST /progress/modules/:id/step order', 'Skipped — Starting Grid not complete');
-    return;
-  }
-
   const modules = await api(token, 'GET', '/modules');
   const firstId = (modules.json as { modules?: { id: string }[] })?.modules?.[0]?.id;
   if (!firstId) {
@@ -352,9 +253,8 @@ async function main() {
 
   pass('Auth sign-in', 'JWT obtained');
 
-  await runAssessmentLeakChecks(token);
-  await runStartingGridAnswerChecks(token);
-  await runStartingGridContentGate(token);
+  await runAssessmentRoutesRemoved();
+  await runModuleContentOpen(token);
   await runStepOrderCheck(token);
   await runIdorChecks(token);
   await runAuditScopeCheck();

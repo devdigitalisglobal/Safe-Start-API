@@ -804,31 +804,9 @@ const finishLineRaw: QuestionSeed[] = [
   },
 ];
 
-const startingGrid = shuffleAssessmentQuestions(startingGridRaw);
-const finishLine = shuffleAssessmentQuestions(finishLineRaw);
-
 // ---------------------------------------------------------------------------
 // 4. Seed logic — idempotent, safe to re-run.
-//    Parents (Module, KnowledgeArea, Assessment) upsert on their unique
-//    fields (slug / key / type). Children (ModuleOutcome, Lesson,
-//    LessonTakeaway, Question, QuestionOption) have no unique constraint of
-//    their own, so we find-by-natural-key and update-or-create rather than
-//    delete+recreate — this avoids breaking FK-restricted rows
-//    (AssessmentAnswer, LessonView) once real learner data exists.
 // ---------------------------------------------------------------------------
-
-async function seedKnowledgeAreas() {
-  const idByKey = new Map<KnowledgeAreaKey, string>();
-  for (const ka of knowledgeAreas) {
-    const record = await prisma.knowledgeArea.upsert({
-      where: { key: ka.key },
-      update: { name: ka.name, orderIndex: ka.orderIndex },
-      create: { key: ka.key, name: ka.name, orderIndex: ka.orderIndex },
-    });
-    idByKey.set(ka.key, record.id);
-  }
-  return idByKey;
-}
 
 async function seedModules() {
   const idBySlug = new Map<string, string>();
@@ -941,29 +919,16 @@ async function seedModules() {
   return idBySlug;
 }
 
-/** Three quiz questions per module — sourced from assessment items for that module. */
+function quizQuestionSourcesForModule(slug: string): QuestionSeed[] {
+  const sg = startingGridRaw.filter((q) => q.moduleSlug === slug);
+  const fl = finishLineRaw.filter((q) => q.moduleSlug === slug);
+  return [...sg, ...fl].slice(0, 3);
+}
+
+/** Three quiz questions per module — copied from legacy assessment question bank in this file. */
 async function seedModuleQuizzes(moduleIds: Map<string, string>) {
-  const [startingGrid, finishLine] = await Promise.all([
-    prisma.assessment.findFirst({ where: { type: "starting_grid" }, select: { id: true } }),
-    prisma.assessment.findFirst({ where: { type: "finish_line" }, select: { id: true } }),
-  ]);
-  if (!startingGrid || !finishLine) {
-    throw new Error("Assessments must be seeded before module quizzes");
-  }
-
-  for (const [, moduleId] of moduleIds) {
-    const sgQuestions = await prisma.question.findMany({
-      where: { assessmentId: startingGrid.id, moduleId },
-      orderBy: { orderIndex: "asc" },
-      include: { options: { orderBy: { letter: "asc" } } },
-    });
-    const flQuestion = await prisma.question.findFirst({
-      where: { assessmentId: finishLine.id, moduleId },
-      orderBy: { orderIndex: "asc" },
-      include: { options: { orderBy: { letter: "asc" } } },
-    });
-
-    const sources = [...sgQuestions, ...(flQuestion ? [flQuestion] : [])].slice(0, 3);
+  for (const [slug, moduleId] of moduleIds) {
+    const sources = quizQuestionSourcesForModule(slug);
     if (sources.length < 3) {
       console.warn(`  Module ${moduleId}: only ${sources.length} source questions — expected 3`);
     }
@@ -1010,163 +975,10 @@ async function seedModuleQuizzes(moduleIds: Map<string, string>) {
   }
 }
 
-async function seedAssessment(
-  type: "starting_grid" | "finish_line",
-  title: string,
-  subtitle: string | null,
-  description: string | null,
-  questions: QuestionSeed[],
-  knowledgeAreaIds: Map<KnowledgeAreaKey, string>,
-  moduleIds: Map<string, string>
-) {
-  if (questions.length !== 14) {
-    throw new Error(`${type} must have exactly 14 questions, found ${questions.length}`);
-  }
-
-  const assessment = await prisma.assessment.upsert({
-    where: { type },
-    update: { title, subtitle: subtitle ?? undefined, description: description ?? undefined },
-    create: { type, title, subtitle: subtitle ?? undefined, description: description ?? undefined },
-  });
-
-  for (const q of questions) {
-    if (q.options.length !== 4) {
-      throw new Error(`${type} Q${q.orderIndex} must have exactly 4 options, found ${q.options.length}`);
-    }
-    const correctCount = q.options.filter((o) => o.isCorrect).length;
-    if (correctCount !== 1) {
-      throw new Error(
-        `${type} Q${q.orderIndex} must have exactly 1 correct option, found ${correctCount}`
-      );
-    }
-
-    const knowledgeAreaId = knowledgeAreaIds.get(q.knowledgeAreaKey);
-    const moduleId = moduleIds.get(q.moduleSlug);
-    if (!knowledgeAreaId) {
-      throw new Error(`Unknown knowledge area key "${q.knowledgeAreaKey}" for ${type} Q${q.orderIndex}`);
-    }
-    if (!moduleId) {
-      throw new Error(`Unknown module slug "${q.moduleSlug}" for ${type} Q${q.orderIndex}`);
-    }
-
-    let question = await prisma.question.findFirst({
-      where: { assessmentId: assessment.id, orderIndex: q.orderIndex },
-    });
-    if (question) {
-      question = await prisma.question.update({
-        where: { id: question.id },
-        data: { text: q.text, knowledgeAreaId, moduleId },
-      });
-    } else {
-      question = await prisma.question.create({
-        data: {
-          assessmentId: assessment.id,
-          orderIndex: q.orderIndex,
-          text: q.text,
-          knowledgeAreaId,
-          moduleId,
-        },
-      });
-    }
-
-    for (const opt of q.options) {
-      const existingOption = await prisma.questionOption.findFirst({
-        where: { questionId: question.id, letter: opt.letter },
-      });
-      if (existingOption) {
-        await prisma.questionOption.update({
-          where: { id: existingOption.id },
-          data: { text: opt.text, isCorrect: opt.isCorrect },
-        });
-      } else {
-        await prisma.questionOption.create({
-          data: {
-            questionId: question.id,
-            letter: opt.letter,
-            text: opt.text,
-            isCorrect: opt.isCorrect,
-          },
-        });
-      }
-    }
-  }
-}
-
-async function loadKnowledgeAreaIds() {
-  const records = await prisma.knowledgeArea.findMany();
-  return new Map(records.map((r) => [r.key as KnowledgeAreaKey, r.id]));
-}
-
-async function loadModuleIds() {
-  const records = await prisma.module.findMany();
-  return new Map(records.map((r) => [r.slug, r.id]));
-}
-
-async function seedAssessmentsOnly() {
-  console.log("Seeding assessments only (Starting Grid + Finish Line)...");
-  const knowledgeAreaIds = await loadKnowledgeAreaIds();
-  const moduleIds = await loadModuleIds();
-  if (knowledgeAreaIds.size === 0 || moduleIds.size === 0) {
-    throw new Error("Knowledge areas and modules must exist before seeding assessments");
-  }
-
-  console.log("  Starting Grid (14 questions)...");
-  await seedAssessment(
-    "starting_grid",
-    "Safe Start — Starting Grid",
-    "How much do you know about owning and looking after a car?",
-    "14 questions • About 5 minutes • Your starting score will be compared with your Finish Line score.",
-    startingGrid,
-    knowledgeAreaIds,
-    moduleIds
-  );
-
-  console.log("  Finish Line (14 questions)...");
-  await seedAssessment(
-    "finish_line",
-    "Finish Line Knowledge Check",
-    null,
-    "14 questions • About 5 minutes • Let's see what you've learned.",
-    finishLine,
-    knowledgeAreaIds,
-    moduleIds
-  );
-
-  console.log("Assessment seed complete ✅");
-}
-
 async function main() {
-  console.log("Seeding knowledge areas...");
-  const knowledgeAreaIds = await seedKnowledgeAreas();
-  console.log(`  ${knowledgeAreaIds.size} knowledge areas seeded.`);
-
   console.log("Seeding modules, outcomes, lessons and key takeaways...");
   const moduleIds = await seedModules();
   console.log(`  ${moduleIds.size} modules seeded.`);
-
-  console.log("Seeding Starting Grid (14 questions)...");
-  await seedAssessment(
-    "starting_grid",
-    "Safe Start — Starting Grid",
-    "How much do you know about owning and looking after a car?",
-    "14 questions • About 5 minutes • Your starting score will be compared with your Finish Line score.",
-    startingGrid,
-    knowledgeAreaIds,
-    moduleIds
-  );
-  console.log("  Starting Grid seeded.");
-
-  console.log("Seeding Finish Line (14 questions)...");
-  await seedAssessment(
-    "finish_line",
-    "Finish Line Knowledge Check",
-    null,
-    "14 questions • About 5 minutes • Let's see what you've learned.",
-    finishLine,
-    knowledgeAreaIds,
-    moduleIds
-  );
-  console.log("  Finish Line seeded.");
 
   console.log("Seeding module quizzes (3 per module)...");
   await seedModuleQuizzes(moduleIds);
@@ -1175,12 +987,9 @@ async function main() {
   console.log("Seed complete ✅");
 }
 
-const assessmentsOnly = process.argv.includes("--assessments-only");
-const runSeed = assessmentsOnly ? seedAssessmentsOnly() : main();
-
-runSeed
+main()
   .catch((err) => {
-    console.error(assessmentsOnly ? "Assessment seed failed:" : "Seed failed:", err);
+    console.error("Seed failed:", err);
     process.exitCode = 1;
   })
   .finally(async () => {

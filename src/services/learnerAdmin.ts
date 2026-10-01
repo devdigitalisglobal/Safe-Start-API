@@ -139,37 +139,22 @@ export async function listLearners(input: ListLearnersInput) {
 export async function getLearnerDetail(userId: string) {
   const user = await getLearnerOrThrow(userId);
 
-  const [modulesCompleted, startingGridDone, finishLineDone, modulesInProgress] =
-    await Promise.all([
-      prisma.moduleProgress.count({
-        where: { userId, status: 'completed' },
-      }),
-      prisma.assessmentAttempt.count({
-        where: {
-          userId,
-          completedAt: { not: null },
-          assessment: { type: 'starting_grid' },
-        },
-      }),
-      prisma.assessmentAttempt.count({
-        where: {
-          userId,
-          completedAt: { not: null },
-          assessment: { type: 'finish_line' },
-        },
-      }),
-      prisma.moduleProgress.count({
-        where: { userId, status: 'in_progress' },
-      }),
-    ]);
+  const [modulesCompleted, modulesInProgress, publishedModuleCount] = await Promise.all([
+    prisma.moduleProgress.count({
+      where: { userId, status: 'completed' },
+    }),
+    prisma.moduleProgress.count({
+      where: { userId, status: 'in_progress' },
+    }),
+    prisma.module.count({ where: { status: 'published' } }),
+  ]);
 
   return {
     ...mapLearnerRow(user),
     progress: {
       modulesCompleted,
       modulesInProgress,
-      startingGridCompleted: startingGridDone > 0,
-      finishLineCompleted: finishLineDone > 0,
+      courseCompleted: publishedModuleCount > 0 && modulesCompleted >= publishedModuleCount,
     },
   };
 }

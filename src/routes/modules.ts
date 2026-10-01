@@ -3,8 +3,6 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errors.js';
-import { assertStartingGridComplete } from '../lib/learnerGates.js';
-
 const paramsSchema = z.object({ id: z.string().uuid() });
 
 export default async function moduleRoutes(app: FastifyInstance) {
@@ -70,8 +68,6 @@ export default async function moduleRoutes(app: FastifyInstance) {
     const { id } = paramsSchema.parse(request.params);
     const userId = request.user!.id;
 
-    await assertStartingGridComplete(userId);
-
     const module = await prisma.module.findFirst({
       where: { id, status: 'published' },
       select: {
@@ -127,8 +123,6 @@ export default async function moduleRoutes(app: FastifyInstance) {
   app.get('/:id/quiz', { preHandler: requireAuth }, async (request) => {
     const { id } = paramsSchema.parse(request.params);
     const userId = request.user!.id;
-
-    await assertStartingGridComplete(userId);
 
     const module = await prisma.module.findFirst({
       where: { id, status: 'published' },

@@ -22,8 +22,8 @@ export default async function healthRoutes(app: FastifyInstance) {
       }
 
       const modules = await prisma.module.count();
-      const questions = await prisma.question.count();
-      return { status: 'ok', database: 'connected', modules, questions };
+      const moduleQuizQuestions = await prisma.moduleQuizQuestion.count();
+      return { status: 'ok', database: 'connected', modules, moduleQuizQuestions };
     } catch (err) {
       const hint =
         err instanceof Error ? err.message.replace(/password[^\s]*/gi, '[redacted]') : 'unknown';
